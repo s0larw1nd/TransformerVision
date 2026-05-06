@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Flow</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            margin-top: 50px;
+        }
+        .container {
+            position: relative;
+        }
+        .box {
+            width: 200px;
+            height: 80px;
+            border: 2px solid black;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin: 40px auto;
+            position: relative;
+            background: white;
+        }
+        svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .main-container {
+            display: flex;
+            height: 100vh;
+        }
+
+        .left, .right {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 10px;
+        }
+
+        .center {
+            flex: 3;
+            padding: 10px;
+        }
+    </style>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+
+    <div class="main-container" id="main-container">
+        <div class="left">
+            <div id="act-map" hidden="true">
+                <iframe id="act-map-plot" style="width:auto;height:700px;border:1px solid #ccc;"></iframe>
+
+                Возможные головы внимания текущего токена: <a id="current-a"></a>
+                Возможные головы внимания предыдущего токена: <a id="prev-a"></a>
+                Возможные головы внимания первого токена: <a id="first-a"></a>
+                Возможные головы внимания индукции: <a id="induction-a"></a>
+            </div>
+
+            <div id="ablat" hidden="true">
+                <div id="ablat-plot" style="width: 500px; height: 1000px;"></div>
+            </div>
+
+            <div id="log-attr" hidden="true">
+                <div id="log-attr-plot" style="width: 500px; height: 1000px;"></div>
+            </div>
+        </div>
+
+        <div class="center">
+            <div class="container" id="container">
+                <svg id="arrows"></svg>
+            </div>
+        </div>
+        
+        <div class="right">
+            <button onclick="act_map()">Карта активаций</button>
+            <button onclick="log_attr()">Атрибуция логитов</button>
+            <button onclick="ablation()">Аблация</button>
+            <button onclick="log_lens()">Логитные линзы</button>
+            <button onclick="act_patch()">Патчинг активаций</button>
+        </div>
+    </div>
+
+    <script>
+        const data = {{ data | tojson }};
+        const container = document.getElementById("container");
+
+        const boxes = [];
+
+        data.forEach(text => {
+            const div = document.createElement("div");
+            div.className = "box";
+            div.innerText = text;
+
+            container.appendChild(div);
+            boxes.push(div);
+        });
+
+        function drawArrows() {
+            const svg = document.getElementById("arrows");
+            svg.innerHTML = "";
+
+            boxes.forEach((box, i) => {
+                if (i === boxes.length - 1) return;
+
+                const rect1 = box.getBoundingClientRect();
+                const rect2 = boxes[i + 1].getBoundingClientRect();
+                const parentRect = container.getBoundingClientRect();
+
+                const x1 = rect1.left + rect1.width / 2 - parentRect.left;
+                const y1 = rect1.bottom - parentRect.top;
+
+                const x2 = rect2.left + rect2.width / 2 - parentRect.left;
+                const y2 = rect2.top - parentRect.top;
+
+                const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                line.setAttribute("x1", x1);
+                line.setAttribute("y1", y1);
+                line.setAttribute("x2", x2);
+                line.setAttribute("y2", y2);
+                line.setAttribute("stroke", "black");
+                line.setAttribute("marker-end", "url(#arrow)");
+
+                svg.appendChild(line);
+            });
+        }
+
+        window.onload = drawArrows;
+        window.onresize = drawArrows;
+
+        async function method_fetch(method_link, experiment_id, model_id) {
+            const resp = await fetch(`http://127.0.0.1:80/${method_link}`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                experiment_id: experiment_id,
+                model_id: model_id // 1 = "gpt2-small"
+                })
+            });
+
+            return resp.json();
+        }
+
+        async function act_map() {
+            const data = await method_fetch(method_link="actmap", experiment_id=1, model_id=1);
+            
+            document.getElementById("act-map").hidden = false;
+            document.getElementById("act-map-plot").srcdoc = data.html;
+
+            document.getElementById("current-a").innerText = data.current.length == 0 ? data.current.join(', ') : "Не найдены";
+            document.getElementById("prev-a").innerText = data.prev.length == 0 ? data.prev.join(', ') : "Не найдены";
+            document.getElementById("first-a").innerText = data.first.length == 0 ? data.first.join(', ') : "Не найдены";
+            document.getElementById("induction-a").innerText = data.induction.length == 0 ? data.induction.join(', ') : "Не найдены";
+        }
+
+        async function ablation() {
+            const data = await method_fetch(method_link="ablation", experiment_id=1, model_id=1);
+
+            document.getElementById("ablat").hidden = false;
+
+            Plotly.newPlot("ablat-plot", data.data, data.layout)
+        }
+
+        async function log_attr() {
+            const data = await method_fetch(method_link="logattr", experiment_id=1, model_id=1);
+            
+            Plotly.newPlot("log-attr-plot", data.data, data.layout)
+        }
+
+        async function log_lens() {
+            const data = await method_fetch(method_link="loglens", experiment_id=1, model_id=1);
+        }
+
+        async function act_patch() {
+            const data = await method_fetch(method_link="actpatch", experiment_id=1, model_id=1);
+        }
+    </script>
+</body>
+</html>

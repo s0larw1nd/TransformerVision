@@ -677,11 +677,13 @@
               <span class="section-subtle">Элементов: 1</span>
             </div>
             <div class="metrics-table">
+              <!--
               <div class="metric-row">
                 <div class="metric-name">Функция потерь</div>
                 <div class="metric-value">0.031</div>
                 <div class="x">×</div>
               </div>
+              -->
               <div class="metric-add">Добавить метрику</div>
             </div>
           </section>
@@ -847,7 +849,8 @@
               </div>
             </div>
           </section>
-
+          
+          <!--
           <section class="panel section">
             <div class="section-head">
               <h2>Доп. поля инструмента</h2>
@@ -856,6 +859,7 @@
               <textarea class="field-box ablation" style="display: none;" placeholder="Введите головы внимания для аблации через запятую"></textarea>
             </div>
           </section>
+          -->
         </div>
       </section>
     </div>
@@ -1245,8 +1249,6 @@
       });
       
       data = await resp.json();
-
-      console.log(data);
 
       switch (data.method.method_name) {
         case 'ablation': ablation(data); break;

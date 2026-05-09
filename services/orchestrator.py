@@ -473,6 +473,7 @@ async def get_history(request: Request, data: dict):
                 SELECT id, method_name, config
                 FROM experiments_runs
                 WHERE cell_id=%s AND status='finished'
+                ORDER BY finished_at DESC
             """, (data['cell_id'],))
             
             history = cur.fetchall()

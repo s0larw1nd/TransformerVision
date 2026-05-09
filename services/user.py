@@ -295,6 +295,28 @@ async def project(request: Request, id_proj: int, id_exp: int):
         request=request, name="notebook.html", context=context
     )
 
+@app.post("/project/{id_proj}/experiment/create")
+async def create_experiment(request: Request, id_proj: int):
+    token = request.cookies.get("access_token")
+    try:
+        payload = jwt.decode(token, os.getenv("SECRET_KEY"), algorithms=["HS256"])
+        idx = int(payload.get("sub"))
+        if idx is None:
+            raise credentials_exception
+    except jwt.InvalidTokenError:
+        raise credentials_exception
+    
+    with psycopg.connect("dbname=userdb user=user password=123 host=localhost port=5435") as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO experiments 
+                (title,description,project_id,created_by,created_at) 
+                VALUES 
+                (%s,%s,%s,%s,%s)
+            """, ('Эксперимент 1', 'Описание 1', id_proj, idx, datetime.datetime.now(datetime.timezone.utc)))
+            
+        conn.commit()
+            
 class Cell(BaseModel):
     id: int
     pos: int

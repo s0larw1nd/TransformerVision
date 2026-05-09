@@ -443,7 +443,7 @@
       <section class="panel experiments-panel">
         <div class="section-header">
           <h2>Эксперименты</h2>
-          <button class="action-btn primary-btn" type="button">+ Создать новый</button>
+          <button class="action-btn primary-btn" type="button" onclick="create_experiment()">+ Создать новый</button>
         </div>
 
         <div class="experiment-list">
@@ -493,6 +493,18 @@
 
     function open_experiment(exp_id) {
       window.location.href = `/project/${ {{ project.id}} }/experiment/${exp_id}`;
+    }
+
+    async function create_experiment() {
+      const resp = await fetch(`/project/${ {{ project.id}} }/experiment/create`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ })
+      });
+
+      window.location.reload();
     }
   </script>
 </body>

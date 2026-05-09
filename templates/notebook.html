@@ -217,6 +217,11 @@
       padding: 16px;
       border-radius: 18px;
       margin: 0;
+      cursor: pointer;
+    }
+
+    .cell.editing {
+      border-color: black;
     }
 
     .cell-header {
@@ -417,7 +422,7 @@
                   </div>
 
                   <div class="model-cell">
-                    <a class="model-link" href="/model">Открыть UI работы с моделью</a>
+                    <a class="model-link" href="/project/{{ experiment.project_id }}/experiment/{{ experiment.id }}/cell/{{ cell.id }}/model">Открыть UI работы с моделью</a>
                     <div class="empty-note">Метрики не добавлены</div>
                   </div>
                 </article>
@@ -430,81 +435,6 @@
               </div>
             </div>
           {% endfor %}
-          
-          <!-- 
-
-          <article class="cell">
-            <div class="cell-header">
-              <span class="cell-type"><span class="marker"></span> Текстовая ячейка</span>
-              <div class="cell-actions">
-                <button class="btn cell-btn" type="button">Скрыть</button>
-                <button class="btn cell-btn danger" type="button">Удалить</button>
-              </div>
-            </div>
-            <div class="cell-content">
-              Это пример текстовой ячейки. В ней может содержаться пояснение, заметка, инструкция или любой другой текстовый фрагмент.
-            </div>
-          </article>
-
-          <div class="insert-zone">
-            <div class="insert-actions">
-              <button class="btn insert-small" type="button">+ Текстовая ячейка</button>
-              <button class="btn insert-small" type="button">+ Модельная ячейка</button>
-            </div>
-          </div>
-
-          <article class="cell">
-            <div class="cell-header">
-              <span class="cell-type"><span class="marker"></span> Модельная ячейка</span>
-              <div class="cell-actions">
-                <button class="btn cell-btn" type="button">Скрыть</button>
-                <button class="btn cell-btn danger" type="button">Удалить</button>
-              </div>
-            </div>
-
-            <div class="model-cell">
-              <a class="model-link" href="/model">Открыть UI работы с моделью</a>
-
-              <table class="metrics">
-                <tr>
-                  <th>Разница между логитами</th>
-                  <td>0.148</td>
-                </tr>
-                <tr>
-                  <th>Функция потерь</th>
-                  <td>0.032</td>
-                </tr>
-                <tr>
-                  <th>Accuracy</th>
-                  <td>94.2%</td>
-                </tr>
-              </table>
-            </div>
-          </article>
-
-          <div class="insert-zone">
-            <div class="insert-actions">
-              <button class="btn insert-small" type="button">+ Текстовая ячейка</button>
-              <button class="btn insert-small" type="button">+ Модельная ячейка</button>
-            </div>
-          </div>
-
-          <article class="cell">
-            <div class="cell-header">
-              <span class="cell-type"><span class="marker"></span> Модельная ячейка</span>
-              <div class="cell-actions">
-                <button class="btn cell-btn" type="button">Скрыть</button>
-                <button class="btn cell-btn danger" type="button">Удалить</button>
-              </div>
-            </div>
-
-            <div class="model-cell">
-              <a class="model-link" href="/model">Открыть UI работы с моделью</a>
-              <div class="empty-note">Метрики не добавлены</div>
-            </div>
-          </article>
-
-          -->
         
         </div>
       </section>
@@ -536,7 +466,7 @@
             <button class="btn cell-btn danger" type="button">Удалить</button>
           </div>
         </div>
-        <div class="cell-content">
+        <div class="cell-content" id="cell-content-${newId}">
           Текст
         </div>
       </article>
@@ -550,6 +480,7 @@
       `;
 
       current.insertAdjacentHTML('afterend', html);
+      add_cell_listeners(newId);
       syncCells();
     }
     function insert_model_first() {
@@ -568,7 +499,7 @@
         </div>
 
         <div class="model-cell">
-          <a class="model-link" href="/model">Открыть UI работы с моделью</a>
+          <a class="model-link" href="/project/{{ experiment.project_id }}/experiment/{{ experiment.id }}/cell/${newId}/model">Открыть UI работы с моделью</a>
           <div class="empty-note">Метрики не добавлены</div>
         </div>
       </article>
@@ -601,7 +532,7 @@
             <button class="btn cell-btn danger" type="button">Удалить</button>
           </div>
         </div>
-        <div class="cell-content">
+        <div class="cell-content" id="cell-content-${newId}">
           Текст
         </div>
       </article>
@@ -613,8 +544,9 @@
         </div>
       </div>
       `;
-
+      
       current.insertAdjacentHTML('afterend', html);
+      add_cell_listeners(newId);
       syncCells();
     }
     function insert_model_after(after) {
@@ -633,7 +565,7 @@
         </div>
 
         <div class="model-cell">
-          <a class="model-link" href="/model">Открыть UI работы с моделью</a>
+          <a class="model-link" href="/project/{{ experiment.project_id }}/experiment/{{ experiment.id }}/cell/${newId}/model">Открыть UI работы с моделью</a>
           <div class="empty-note">Метрики не добавлены</div>
         </div>
       </article>
@@ -677,6 +609,43 @@
       console.log(result);
 
       return result;
+    }
+
+    function add_cell_listeners(id) {
+      console.log(id);
+      const cell = document.getElementById(`cell-${id}`);
+      const content = document.getElementById(`cell-content-${id}`);
+
+      cell.addEventListener('dblclick', () => {
+        content.contentEditable = true;
+        cell.classList.add('editing');
+
+        content.focus();
+
+        const range = document.createRange();
+        range.selectNodeContents(content);
+        range.collapse(false);
+
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+      });
+
+      cell.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          content.contentEditable = false;
+          cell.classList.remove('editing');
+          cell.blur();
+          syncCells();
+        }
+      });
+
+      cell.addEventListener('blur', () => {
+        cell.contentEditable = false;
+        cell.classList.remove('editing');
+        syncCells();
+      });
     }
 
     async function syncCells() {

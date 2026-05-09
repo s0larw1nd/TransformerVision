@@ -1,19 +1,127 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <title>Регистрация</title>
-</head>
-<body>
-    <h2>Регистрация в систему</h2>
-    <form action="/register" method="POST">
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --line: #e5e7eb;
+    --soft: #f3f4f6;
+    --accent: #111827;
+  }
+
+  .register-wrap {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: var(--bg);
+    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color: var(--text);
+  }
+
+  .register-card {
+    width: 100%;
+    max-width: 420px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.02);
+    padding: 22px;
+  }
+
+  .register-title {
+    margin: 0 0 6px;
+    font-size: 24px;
+    letter-spacing: -0.03em;
+  }
+
+  .register-subtitle {
+    margin: 0 0 18px;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .register-form label {
+    display: inline-block;
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .register-form input[type="text"],
+  .register-form input[type="password"] {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: #fff;
+    color: var(--text);
+    font: inherit;
+    padding: 12px 14px;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .register-form input[type="text"]:focus,
+  .register-form input[type="password"]:focus {
+    border-color: #cbd5e1;
+    box-shadow: 0 0 0 4px rgba(17, 24, 39, 0.04);
+  }
+
+  .register-form button {
+    width: 100%;
+    border: 1px solid var(--accent);
+    border-radius: 12px;
+    padding: 12px 14px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 14px;
+    cursor: pointer;
+    transition: 0.15s ease;
+  }
+
+  .register-form button:hover {
+    opacity: 0.92;
+  }
+
+  .login-link {
+    display: block;
+    margin-top: 12px;
+    text-align: center;
+    font-size: 14px;
+    color: var(--muted);
+    text-decoration: none;
+  }
+
+  .login-link:hover {
+    color: var(--text);
+    text-decoration: underline;
+  }
+
+  .field {
+    margin-bottom: 14px;
+  }
+</style>
+
+<div class="register-wrap">
+  <div class="register-card">
+    <h1 class="register-title">Регистрация</h1>
+    <p class="register-subtitle">Создайте аккаунт для входа в систему.</p>
+
+    <form class="register-form" action="/register" method="POST">
+      <div class="field">
         <label for="username">Логин:</label><br>
-        <input type="text" id="username" name="username" required><br><br>
+        <input type="text" id="username" name="username" required>
+      </div>
 
+      <div class="field">
         <label for="password">Пароль:</label><br>
-        <input type="password" id="password" name="password" required><br><br>
+        <input type="password" id="password" name="password" required>
+      </div>
 
-        <button type="submit">Зарегистрироваться</button>
+      <button type="submit">Зарегистрироваться</button>
+      <a class="login-link" href="/login">Войти</a>
     </form>
-</body>
-</html>
+  </div>
+</div>

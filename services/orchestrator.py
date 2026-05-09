@@ -13,10 +13,8 @@ import einops
 import functools
 from plotly.express import imshow
 import numpy as np
-
-class ExperimentRequest(BaseModel):
-    experiment_id: int
-    model_id: int
+import requests as rqsts
+import plotly.io as pio
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -28,7 +26,6 @@ async def lifespan(app: FastAPI):
                 cell_id INT,
                 seq_no INT,
                 method_name TEXT,
-                hook_name TEXT,
                 config TEXT,
                 status TEXT,
                 started_at TIMESTAMP,
@@ -39,23 +36,12 @@ async def lifespan(app: FastAPI):
             CREATE TABLE IF NOT EXISTS experiments_runs_results (
                 id SERIAL PRIMARY KEY,
                 run_id INT,
+                text_json JSONB,
                 metrics_json JSONB,
                 artifacts_refs_json JSONB
             )
             """)
             conn.commit()
-            
-            cur.execute(f"SELECT * FROM experiments_runs")
-            rows = cur.fetchall()
-            if len(rows) == 0:
-                data = {
-                    "type": "aboba"
-                }
-                
-                cur.execute("""
-                INSERT INTO experiments_runs (cell_id,seq_no,method_name,hook_name,config,status,started_at,finished_at,runtime) 
-                VALUES (2, 1, 'Ablation', 'blocks.3.hook_resid_pre', %s, 'Success', %s, %s, 0)            
-                """, (json.dumps(data), datetime.datetime.now(datetime.timezone.utc), datetime.datetime.now(datetime.timezone.utc)))
     yield
 
 app = FastAPI(lifespan=lifespan)
@@ -85,28 +71,6 @@ def convert_tokens_to_string(model, tokens, batch_index=0):
     if len(tokens.shape) == 2:
         tokens = tokens[batch_index]
     return [f"|{model.tokenizer.decode(tok)}|_{c}" for (c, tok) in enumerate(tokens)]
-def plot_logit_attribution(
-    model, logit_attr: t.Tensor, tokens: t.Tensor, title: str = "", filename: str | None = None
-):
-    tokens = tokens.squeeze()
-    y_labels = convert_tokens_to_string(model, tokens[:-1])
-    x_labels = ["Direct"] + [
-        f"H{h}" for h in range(model.cfg.n_heads)
-    ]
-    
-    fig = imshow(
-        to_numpy(logit_attr),  # type: ignore
-        x=x_labels,
-        y=y_labels,
-        labels={"x": "Term", "y": "Position", "color": "logit"},
-        title=title if title else None,
-        #height=100 + (30 if title else 0) + 15 * len(y_labels),
-        #width=24 * len(x_labels),
-        #return_fig=True,
-    )
-    #fig.show()
-
-    return fig
 
 def logdb(func):
     @functools.wraps(func)
@@ -118,28 +82,38 @@ def logdb(func):
             with conn.cursor() as cur:
                 cur.execute("""
                     INSERT INTO experiments_runs (
-                        experiment_id,
-                        model_id,
+                        cell_id,
+                        seq_no,
                         method_name,
+                        config,
                         status,
                         started_at,
                         finished_at,
                         runtime
                     )
-                    VALUES (%s, %s, %s, %s, %s, NULL, NULL)
+                    VALUES (%s,%s,%s,%s,'pending',%s, NULL, NULL)
                     RETURNING id;
                 """, (
-                    kwargs['request'].experiment_id,
-                    kwargs['request'].model_id,
+                    kwargs['data']['cell_id'],
+                    kwargs['data']['seq_no'],
                     func.__name__,
-                    'pending',
+                    kwargs['data']['config'],
                     start
                 ))
                 
                 inserted_id = cur.fetchone()[0]
                 conn.commit()
                 
-        result = await func(*args, **kwargs) 
+        result = await func(*args, **kwargs)
+    
+        data = json.loads(result.body)
+        
+        figures_saved = {} 
+        if "fig" in data:
+            with open(f"../stored/{inserted_id}.json", "w", encoding="utf-8") as f:
+                f.write(data["fig"])
+            del data["fig"]
+            figures_saved['fig'] = f'{inserted_id}.json'
         
         finish = datetime.datetime.now(datetime.timezone.utc)
         with psycopg.connect("dbname=orchestratordb user=user password=123 host=localhost port=5434") as conn:
@@ -152,8 +126,18 @@ def logdb(func):
                     WHERE id = {inserted_id}
                 """)
                 
-                conn.commit()
-        
+                cur.execute("""
+                    INSERT INTO experiments_runs_results (
+                        run_id,
+                        text_json,
+                        metrics_json,
+                        artifacts_refs_json
+                    )
+                    VALUES (%s,%s,%s,%s)
+                """, (inserted_id, json.dumps(data) if len(data)!=0 else None, None, json.dumps(figures_saved) if figures_saved else None))
+                
+            conn.commit()
+    
         return result
     
     return wrapper
@@ -210,7 +194,7 @@ async def parse_config(model_name):
 
 @app.post("/ablation")
 @logdb
-async def ablation(request: ExperimentRequest):
+async def ablation(request: Request, data: dict):
     def get_log_probs(logits, tokens):
         logprobs = logits.log_softmax(dim=-1)
         
@@ -228,11 +212,18 @@ async def ablation(request: ExperimentRequest):
     def head_zero_ablation_hook(z, hook, head_index_to_ablate):
         z[:, :, head_index_to_ablate, :] = 0.0
         
-    device = t.device("mps" if t.backends.mps.is_available() else "cuda" if t.cuda.is_available() else "cpu")
-    model = HookedTransformer.from_pretrained("gpt2-small", device=device)
-    prompt = "We think that powerful, significantly superhuman machine intelligence is more likely than not to be created this century. If current machine learning techniques were scaled up to this level, we think they would by default produce systems that are deceptive or manipulative, and that no solid plans are known for how to avoid this."
+    config = json.loads(data['config'])
     
-    ablation_scores = t.zeros(model.cfg.n_heads, device=device)
+    try:
+        model_name = rqsts.get(f"http://localhost:80/model/{data['model_id']}").json()["title"]
+    except Exception:
+        model_name = "Ошибка"
+    
+    device = t.device("mps" if t.backends.mps.is_available() else "cuda" if t.cuda.is_available() else "cpu")
+    model = HookedTransformer.from_pretrained(model_name, device=device)
+    prompt = config["prompt"]
+    
+    ablation_scores = t.zeros(len(config["head_n"]), device=device)
     tokens = model.to_tokens(prompt)
     
     model.reset_hooks()
@@ -240,45 +231,61 @@ async def ablation(request: ExperimentRequest):
     logits = model(tokens, return_type="logits")
     loss_no_ablation = -get_log_probs(logits, tokens)[:, -(seq_len - 1) :].mean()
     
-    for head in range(model.cfg.n_heads):
-        temp_hook_fn = functools.partial(head_zero_ablation_hook, head_index_to_ablate=head)
-        ablated_logits = model.run_with_hooks(tokens, fwd_hooks=[(utils.get_act_name("z", 1), temp_hook_fn)])
+    for i, head_idx in enumerate(config["head_n"]):
+        temp_hook_fn = functools.partial(head_zero_ablation_hook, head_index_to_ablate=head_idx)
+        ablated_logits = model.run_with_hooks(tokens, fwd_hooks=[(utils.get_act_name("z", config["layer_n"]), temp_hook_fn)])
         loss = -get_log_probs(ablated_logits, tokens)[:, -(seq_len - 1) :].mean()
-        ablation_scores[head] = loss - loss_no_ablation
+    
+        ablation_scores[i] = loss - loss_no_ablation
     
     ablation_scores = ablation_scores.unsqueeze(0).transpose(-1,-2).cpu().detach().numpy()
+    
     fig = imshow(
         ablation_scores,
+        y=config["head_n"],
         labels={"y": "Голова внимания", "color": "Logit diff"},
         title="Изменения значения функции потерь после аблации",
         text_auto=".2f",
     )
-    return Response(content=fig.to_json(), media_type="application/json")
+    
+    content = {
+        "scores": ablation_scores.squeeze(1).tolist(),
+        "fig": fig.to_json()
+    }
+    
+    return Response(content=json.dumps(content), media_type="application/json")
 
 @app.post("/actmap")
 @logdb
-async def activation_map(request: ExperimentRequest):
-    device = t.device("mps" if t.backends.mps.is_available() else "cuda" if t.cuda.is_available() else "cpu")
-    model = HookedTransformer.from_pretrained("gpt2-small", device=device)
-    prompt = "Hello world"
+async def activation_map(request: Request, data: dict):
+    config = json.loads(data['config'])
     
-    gpt2_tokens = model.to_tokens(prompt)
-    gpt2_logits, gpt2_cache = model.run_with_cache(gpt2_tokens, remove_batch_dim=True)
-            
-    attention_pattern = gpt2_cache["pattern", 1]
-    gpt2_str_tokens = model.to_str_tokens(prompt)
+    try:
+        model_name = rqsts.get(f"http://localhost:80/model/{data['model_id']}").json()["title"]
+    except Exception:
+        model_name = "Ошибка"
+    
+    device = t.device("mps" if t.backends.mps.is_available() else "cuda" if t.cuda.is_available() else "cpu")
+    model = HookedTransformer.from_pretrained(model_name, device=device)
+    prompt = config["prompt"]
+    
+    tokens = model.to_tokens(prompt)
+    logits, cache = model.run_with_cache(tokens, remove_batch_dim=True)
 
-    html = cv.attention.attention_patterns(
-        gpt2_str_tokens,
-        attention_pattern
+    attention_pattern = cache["pattern", config["layer_n"]]
+    str_tokens = model.to_str_tokens(prompt)
+    
+    fig = cv.attention.attention_patterns(
+        str_tokens,
+        attention_pattern[tuple([h for h in config['head_n']]),:,:]
     )
     
     current_token = []
     prev_token = []
     first_token = []
     induction = []
-    for head in range(model.cfg.n_heads):
-        attention_pattern = gpt2_cache["pattern", 1][head]
+    for head in config["head_n"]:
+        attention_pattern = cache["pattern", config["layer_n"]][head]
         score_current = attention_pattern.diagonal().mean()
         score_prev = attention_pattern.diagonal(-1).mean()
         score_first = attention_pattern[:, 0].mean()
@@ -286,75 +293,143 @@ async def activation_map(request: ExperimentRequest):
         seq_len = (attention_pattern.shape[-1] - 1) // 2
         score_induction = attention_pattern.diagonal(-seq_len + 1).mean()
         if score_current > 0.4:
-            current_token.append(str(head))
+            current_token.append(head)
         if score_prev > 0.4:
-            prev_token.append(str(head))
+            prev_token.append(head)
         if score_first > 0.4:
-            first_token.append(str(head))
+            first_token.append(head)
         if score_induction > 0.4:
-            induction.append(str(head))
+            induction.append(head)
 
-    return JSONResponse({"html": html._repr_html_(), "current": current_token, "prev": prev_token, "first": first_token, "induction": induction})
+    content = {
+        "fig": str(fig._repr_html_()),
+        "current": current_token,
+        "prev": prev_token,
+        "first": first_token,
+        "induction": induction
+    }
+    
+    return Response(content=json.dumps(content), media_type="application/json")
 
 @app.post("/logattr")
 @logdb
-async def logit_attribution(request: ExperimentRequest):
+async def logit_attribution(request: Request, data: dict):
+    config = json.loads(data['config'])
+    
+    try:
+        model_name = rqsts.get(f"http://localhost:80/model/{data['model_id']}").json()["title"]
+    except Exception:
+        model_name = "Ошибка"
+
     device = t.device("mps" if t.backends.mps.is_available() else "cuda" if t.cuda.is_available() else "cpu")
-    model = HookedTransformer.from_pretrained("gpt2-small", device=device)
-    prompt = "Hello world"
+    model = HookedTransformer.from_pretrained(model_name, device=device)
+    prompt = config["prompt"]
     
-    gpt2_tokens = model.to_tokens(prompt)
-
-    gpt2_logits, gpt2_cache = model.run_with_cache(gpt2_tokens, remove_batch_dim=True)
-
-    embed = gpt2_cache["embed"]
+    tokens = model.to_tokens(prompt)
     
-    z = gpt2_cache['z', 1]
-    results = t.einsum('shd,hdm->shm', z, model.W_O[1])
+    _, cache = model.run_with_cache(tokens, remove_batch_dim=True)
 
-    W_U_correct_tokens = model.W_U[:, gpt2_tokens.squeeze()[1:]]
+    embed = cache["embed"]
+    
+    z = cache['z', config["layer_n"]]
+    results = t.einsum('shd,hdm->shm', z, model.W_O[config["layer_n"]])
 
-    direct_attributions = einops.einsum(W_U_correct_tokens, embed[:-1], "emb seq, seq emb -> seq")
-    layer_attributions = einops.einsum(W_U_correct_tokens, results[:-1], "emb seq, seq nhead emb -> seq nhead")
+    W_U_correct_tokens = model.W_U[:, tokens.squeeze()[1:]]
+
+    direct_attributions = einops.einsum(W_U_correct_tokens, embed[1:], "emb seq, seq emb -> seq")
+    layer_attributions = einops.einsum(W_U_correct_tokens, results[1:], "emb seq, seq nhead emb -> seq nhead")
     
     logit_attr = t.concat([direct_attributions.unsqueeze(-1), layer_attributions], dim=-1)
     
-    fig = plot_logit_attribution(model, logit_attr, gpt2_tokens, title="Атрибуция логитов")
+    tokens = tokens.squeeze()
+    y_labels = convert_tokens_to_string(model, tokens[1:])
+    x_labels = ["Direct"] + [
+        f"H{h}" for h in config["head_n"]
+    ]
+            
+    fig = imshow(
+        to_numpy(logit_attr[:, tuple([0]+[h+1 for h in config['head_n']])]),
+        x=x_labels,
+        y=y_labels,
+        labels={"x": "Term", "y": "Position", "color": "logit"},
+        title="Атрибуция логитов",
+        #height=100 + (30 if title else 0) + 15 * len(y_labels),
+        #width=24 * len(x_labels),
+        #return_fig=True,
+    )
     
-    return Response(content=fig.to_json(), media_type="application/json")
+    content = {
+        "fig": fig.to_json()
+    }
+    
+    return Response(content=json.dumps(content), media_type="application/json")
 
 @app.post("/loglens")
 @logdb
-async def logit_lens(request: ExperimentRequest):
+async def logit_lens(request: Request, data: dict):
+    config = json.loads(data['config'])
+    
+    try:
+        model_name = rqsts.get(f"http://localhost:80/model/{data['model_id']}").json()["title"]
+    except Exception:
+        model_name = "Ошибка"
+    
     device = t.device("mps" if t.backends.mps.is_available() else "cuda" if t.cuda.is_available() else "cpu")
-    model = HookedTransformer.from_pretrained("gpt2-small", device=device)
-    prompt = "Hello world"
+    model = HookedTransformer.from_pretrained(model_name, device=device)
+    prompt = config["prompt"]
     
-    gpt2_tokens = model.to_tokens(prompt)
+    tokens = model.to_tokens(prompt)
 
-    gpt2_logits, gpt2_cache = model.run_with_cache(gpt2_tokens, remove_batch_dim=True)
+    logits, cache = model.run_with_cache(tokens, remove_batch_dim=True)
     
-    res_stream = gpt2_cache['blocks.8.hook_resid_post']
+    res_stream = cache[f'blocks.{config["layer_n"]}.hook_resid_post']
     
     logits = model.unembed(model.ln_final(res_stream))
     last_token_logits = logits[-1]
     
-    print(logits.shape)
+    correct_tokens = tokens.squeeze(0)[1:]
+    last_token_logits_correct = last_token_logits[correct_tokens]
+        
+    fig = imshow(
+        to_numpy(last_token_logits_correct.unsqueeze(1)),
+        y=convert_tokens_to_string(model, correct_tokens),
+        labels={"y": "Position", "color": "logit"},
+        title="Логитные линзы",
+        #height=100 + (30 if title else 0) + 15 * len(y_labels),
+        #width=24 * len(x_labels),
+        #return_fig=True,
+    )
+    
+    content = {
+        "fig": fig.to_json()
+    }
+    
+    return Response(content=json.dumps(content), media_type="application/json")
     
 @app.post("/actpatch")
 @logdb
-async def activation_patching(request: ExperimentRequest):
+async def activation_patching(request: Request, data: dict):
+    config = json.loads(data['config'])
+    
+    try:
+        model_name = rqsts.get(f"http://localhost:80/model/{data['model_id']}").json()["title"]
+    except Exception:
+        model_name = "Ошибка"
+        
     device = t.device("mps" if t.backends.mps.is_available() else "cuda" if t.cuda.is_available() else "cpu")
-    model = HookedTransformer.from_pretrained("gpt2-small", device=device)
+    model = HookedTransformer.from_pretrained(model_name, device=device)
 
-    prompt_clean = "The capital of France is"
-    prompt_corrupted = "The capital of Germany is"
+    prompt_clean = config["correct_prompt"].strip()
+    prompt_corrupted = config["corrupted_prompt"].strip()
+    answer = config["answer"].strip()
+    
+    correct_tokens = model.to_tokens(prompt_clean + " " + answer)[:, model.to_tokens(prompt_clean).shape[1]:].squeeze(0)
 
     tokens_clean = model.to_tokens(prompt_clean)
-    _, cache_clean = model.run_with_cache(tokens_clean, remove_batch_dim=False)
+    clean_logits, cache_clean = model.run_with_cache(tokens_clean, remove_batch_dim=False)
 
-    layer = 5
-    head_idx = 5
+    layer = config["layer_n"]
+    head_idx = tuple([h for h in config['head_n']])
 
     def head_patch_hook(z, hook):
         z = z.clone()
@@ -366,5 +441,79 @@ async def activation_patching(request: ExperimentRequest):
         tokens_corrupted,
         fwd_hooks=[(utils.get_act_name("z", layer), head_patch_hook)],
     )
+        
+    logits = t.concat([
+        clean_logits.squeeze(0)[-1,correct_tokens].unsqueeze(0),
+        patched_logits.squeeze(0)[-1,correct_tokens].unsqueeze(0)
+    ], dim=0)
     
-    print(patched_logits.shape)
+    fig = imshow(
+        to_numpy(logits),
+        y=["Корректный", "Некорректный"],
+        x=convert_tokens_to_string(model, correct_tokens),
+        labels={"x": "Токен", "y": "Промпт", "color": "logit"},
+        title="Атрибуция логитов",
+        #height=100 + (30 if title else 0) + 15 * len(y_labels),
+        #width=24 * len(x_labels),
+        #return_fig=True,
+    )
+    
+    content = {
+        "diff": (t.diff(logits, n=1, dim=0)/logits.shape[1])[0][0].tolist(),
+        "fig": fig.to_json()
+    }
+    
+    return Response(content=json.dumps(content), media_type="application/json")
+
+@app.post("/history")
+async def get_history(request: Request, data: dict):
+    with psycopg.connect("dbname=orchestratordb user=user password=123 host=localhost port=5434", row_factory=psycopg.rows.dict_row) as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, method_name, config
+                FROM experiments_runs
+                WHERE cell_id=%s AND status='finished'
+            """, (data['cell_id'],))
+            
+            history = cur.fetchall()
+            
+    content = {
+        "history": history
+    }
+    
+    return Response(content=json.dumps(content), media_type="application/json")
+
+@app.post("/history/{id}")
+async def from_history(request: Request, id: int):
+    print(id)
+    
+    with psycopg.connect("dbname=orchestratordb user=user password=123 host=localhost port=5434", row_factory=psycopg.rows.dict_row) as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT method_name, config
+                FROM experiments_runs
+                WHERE id=%s
+            """, (id,))
+            
+            method = cur.fetchone()
+            
+            cur.execute("""
+                SELECT * 
+                FROM experiments_runs_results
+                WHERE run_id=%s
+            """, (id,))
+
+            operation = cur.fetchone()
+            
+            print(operation)
+    
+    content = {
+        'method': method
+    }
+    
+    if operation['artifacts_refs_json']['fig']:
+        with open(f"../stored/{operation['artifacts_refs_json']['fig']}", "r", encoding="utf-8") as f:
+            fig = pio.from_json(f.read())
+        content["fig"] = fig.to_json()
+        
+    return Response(content=json.dumps(content | operation['text_json']), media_type="application/json")

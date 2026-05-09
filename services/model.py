@@ -13,7 +13,9 @@ async def lifespan(app: FastAPI):
             cur.execute("""
             CREATE TABLE IF NOT EXISTS models (
                 id SERIAL PRIMARY KEY,
-                title TEXT
+                title TEXT,
+                n_layers INT,
+                n_heads INT
             )
             """)
             conn.commit()
@@ -22,7 +24,7 @@ async def lifespan(app: FastAPI):
             rows = cur.fetchall()
             if len(rows) == 0:
                 cur.execute(f"""
-                INSERT INTO models (title) VALUES ('GPT 2-small')
+                INSERT INTO models (title,n_layers,n_heads) VALUES ('gpt2-small',12,12)
                 """)
     yield
 

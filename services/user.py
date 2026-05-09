@@ -55,37 +55,6 @@ async def lifespan(app: FastAPI):
                 project_id INT  
             )
             """)
-            
-            cur.execute(f"SELECT * FROM projects")
-            rows = cur.fetchall()
-            if len(rows) == 0:
-                cur.execute(f"""
-                INSERT INTO projects (title,description,model_id,owner_id,status,is_private,created_at,updated_at) VALUES ('Title', 'Description', 1, 1, 'Active', FALSE, '{datetime.datetime.now(datetime.timezone.utc)}', '{datetime.datetime.now(datetime.timezone.utc)}')            
-                """)
-            
-            cur.execute(f"SELECT * FROM projects_users")
-            rows = cur.fetchall()
-            if len(rows) == 0:
-                cur.execute(f"""
-                INSERT INTO projects_users (user_id,project_id) VALUES (1,1);
-                INSERT INTO projects_users (user_id,project_id) VALUES (2,1)
-                """)
-                
-            cur.execute(f"SELECT * FROM experiments")
-            rows = cur.fetchall()
-            if len(rows) == 0:
-                cur.execute(f"""
-                INSERT INTO experiments (title,description,project_id,created_by,created_at) VALUES ('Эксперимент 1', 'Описание 1', 1, 1, '{datetime.datetime.now(datetime.timezone.utc)}')
-                """)
-                
-            cur.execute(f"SELECT * FROM cells")
-            rows = cur.fetchall()
-            if len(rows) == 0:
-                cur.execute(f"""
-                INSERT INTO cells (experiment_id,pos,type,stext) VALUES (1,1,'TEXT','TEXT EXAMPLE');
-                INSERT INTO cells (experiment_id,pos,type,stext) VALUES (1,2,'MODEL',NULL);
-                """)
-            
             conn.commit()
     yield
 
@@ -334,8 +303,6 @@ class Cell(BaseModel):
 
 @app.post("/project/{id_proj}/experiment/{id_exp}/sync")
 async def project_cells_sync(request: Request, id_proj: int, id_exp: int, cells: List[Cell]):
-    print(id_proj, id_exp, cells)
-    
     with psycopg.connect("dbname=userdb user=user password=123 host=localhost port=5435") as conn:
         with conn.cursor() as cur:
             for cell in cells:
@@ -349,3 +316,38 @@ async def project_cells_sync(request: Request, id_proj: int, id_exp: int, cells:
                 """, (cell.id, id_exp, cell.pos, cell.type, cell.stext))
 
         conn.commit()
+        
+@app.get("/project/{id_proj}/experiment/{id_exp}/cell/{id_cell}/model")
+async def project_cell_model(request: Request, id_proj: int, id_exp: int, id_cell: int):
+    with psycopg.connect("dbname=userdb user=user password=123 host=localhost port=5435") as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT model_id
+                FROM projects
+                WHERE id=%s
+            """, (id_proj,))
+            
+            model_id = cur.fetchone()[0]
+            
+    context = {
+        "experiment": {
+            "id": id_exp,
+        },
+        "cell": {
+            "id": id_cell,
+        },
+        "model": {
+            "id": model_id,
+            "n_head": 12,
+            "n_layers": 12
+        },
+        "layers": ['hook_resid_post', 'hook_mlp_out', 'mlp.hook_post', 'mlp.hook_pre', 'ln2.hook_normalized', 'ln2.hook_scale', 
+                    'hook_resid_mid', 'hook_attn_out', 'attn.hook_z', 'attn.hook_pattern', 'attn.hook_attn_scores', 'attn.hook_v', 
+                    'attn.hook_k', 'attn.hook_q', 'ln1.hook_normalized', 'ln1.hook_scale', 'hook_resid_pre'][::-1],
+        "op_history": [],
+        "metrics": [],
+    }
+    
+    return templates.TemplateResponse(
+        request=request, name="model.html", context=context
+    )

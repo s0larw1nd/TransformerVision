@@ -7,7 +7,9 @@ from fastapi.middleware.cors import CORSMiddleware
 import psycopg
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(
+    app: FastAPI
+):
     with psycopg.connect("dbname=modeldb user=user password=123 host=localhost port=5436") as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -38,7 +40,9 @@ app.add_middleware(
 )
     
 @app.get("/model/{id}")
-async def get_info(id: int):
+async def get_info(
+    id: int
+):
     with psycopg.connect("dbname=modeldb user=user password=123 host=localhost port=5436", row_factory=psycopg.rows.dict_row) as conn:
         with conn.cursor() as cur:
             cur.execute("""

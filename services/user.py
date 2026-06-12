@@ -16,7 +16,9 @@ import requests
 load_dotenv("../secret.env")
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(
+    app: FastAPI
+):
     with psycopg.connect("dbname=userdb user=user password=123 host=localhost port=5435") as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -71,12 +73,13 @@ credentials_exception = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
     detail="Could not validate credentials",
     headers={"WWW-Authenticate": "Bearer"},
-)  
+)
 
-@app.get("/profile")
-async def profile(request: Request):  
+async def get_current_user(
+    request: Request
+):
     token = request.cookies.get("access_token")
-    
+
     try:
         payload = jwt.decode(token, os.getenv("SECRET_KEY"), algorithms=["HS256"])
         idx = int(payload.get("sub"))
@@ -84,7 +87,14 @@ async def profile(request: Request):
             raise credentials_exception
     except jwt.InvalidTokenError:
         raise credentials_exception
+    
+    return idx
 
+@app.get("/profile")
+async def profile(
+    request: Request,
+    idx: int = Depends(get_current_user)
+):
     projects = []
     
     with psycopg.connect(
@@ -145,7 +155,10 @@ async def profile(request: Request):
     return templates.TemplateResponse(request, name="profile.html", context=context)
 
 @app.get("/project/create")
-async def create_project(request: Request):
+async def create_project(
+    request: Request,
+    idx: int = Depends(get_current_user)
+):
     models = requests.get(f"http://localhost:80/model/").json()
     context = {
         "models": models
@@ -153,24 +166,16 @@ async def create_project(request: Request):
     return templates.TemplateResponse(
         request=request, name="create_project.html", context=context
     )
+
 @app.post("/project/create")
 async def create_project(
     request: Request,
     title: Annotated[str, Form()],
     description: Annotated[str, Form()],
     model: Annotated[int, Form()],
-    is_private: Annotated[bool | None, Form()] = False
-    ):
-    
-    token = request.cookies.get("access_token")
-    try:
-        payload = jwt.decode(token, os.getenv("SECRET_KEY"), algorithms=["HS256"])
-        idx = int(payload.get("sub"))
-        if idx is None:
-            raise credentials_exception
-    except jwt.InvalidTokenError:
-        raise credentials_exception
-    
+    is_private: Annotated[bool | None, Form()] = False,
+    idx: int = Depends(get_current_user)
+):
     with psycopg.connect(
         "dbname=userdb user=user password=123 host=localhost port=5435",
     ) as conn:
@@ -188,7 +193,11 @@ async def create_project(
     return RedirectResponse(url="/profile", status_code=status.HTTP_303_SEE_OTHER)
 
 @app.get("/project/{id}")
-async def project(request: Request, id: int):
+async def project(
+    request: Request, 
+    id: int,
+    idx: int = Depends(get_current_user)
+):
     with psycopg.connect(
         "dbname=userdb user=user password=123 host=localhost port=5435",
         row_factory=psycopg.rows.namedtuple_row
@@ -266,7 +275,12 @@ async def project(request: Request, id: int):
     )
     
 @app.get("/project/{id_proj}/experiment/{id_exp}")
-async def project(request: Request, id_proj: int, id_exp: int):
+async def project(
+    request: Request, 
+    id_proj: int, 
+    id_exp: int,
+    idx: int = Depends(get_current_user)
+):
     with psycopg.connect("dbname=userdb user=user password=123 host=localhost port=5435", row_factory=psycopg.rows.dict_row) as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -296,16 +310,11 @@ async def project(request: Request, id_proj: int, id_exp: int):
     )
 
 @app.post("/project/{id_proj}/experiment/create")
-async def create_experiment(request: Request, id_proj: int):
-    token = request.cookies.get("access_token")
-    try:
-        payload = jwt.decode(token, os.getenv("SECRET_KEY"), algorithms=["HS256"])
-        idx = int(payload.get("sub"))
-        if idx is None:
-            raise credentials_exception
-    except jwt.InvalidTokenError:
-        raise credentials_exception
-    
+async def create_experiment(
+    request: Request, 
+    id_proj: int,
+    idx: int = Depends(get_current_user)
+):
     with psycopg.connect("dbname=userdb user=user password=123 host=localhost port=5435") as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -324,7 +333,13 @@ class Cell(BaseModel):
     stext: str | None = None
 
 @app.post("/project/{id_proj}/experiment/{id_exp}/sync")
-async def project_cells_sync(request: Request, id_proj: int, id_exp: int, cells: List[Cell]):
+async def project_cells_sync(
+    request: Request, 
+    id_proj: int, 
+    id_exp: int, 
+    cells: List[Cell],
+    idx: int = Depends(get_current_user)
+):
     with psycopg.connect("dbname=userdb user=user password=123 host=localhost port=5435") as conn:
         with conn.cursor() as cur:
             for cell in cells:
@@ -338,9 +353,15 @@ async def project_cells_sync(request: Request, id_proj: int, id_exp: int, cells:
                 """, (cell.id, id_exp, cell.pos, cell.type, cell.stext))
 
         conn.commit()
-        
+
 @app.get("/project/{id_proj}/experiment/{id_exp}/cell/{id_cell}/model")
-async def project_cell_model(request: Request, id_proj: int, id_exp: int, id_cell: int):
+async def project_cell_model(
+    request: Request, 
+    id_proj: int, 
+    id_exp: int, 
+    id_cell: int,
+    idx: int = Depends(get_current_user)
+):
     with psycopg.connect("dbname=userdb user=user password=123 host=localhost port=5435") as conn:
         with conn.cursor() as cur:
             cur.execute("""

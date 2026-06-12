@@ -979,6 +979,40 @@
       submenu.classList.toggle('active');
     }
 
+    async function get_data(
+      body
+    ) {
+      const resp = await fetch(`http://127.0.0.1:80/method`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+      },
+        body: body
+      });
+
+      const job = await resp.json();
+
+      const data = await new Promise((resolve, reject) => {
+        const source = new EventSource(
+          `/results/${job.cid}`
+        );
+
+        source.onmessage = (event) => {
+          const temp = JSON.parse(event.data);
+          source.close();
+          resolve(temp);
+        };
+
+        source.onerror = (err) => {
+          console.log(err);
+          source.close();
+          reject(err);
+        };
+      });
+
+      return data;
+    }
+
     async function ablation(data = null) {
       if (data == null) {
         const input = document.getElementById('ablation-heads');
@@ -986,20 +1020,15 @@
         .split(',')
         .map(s => Number(s.trim()));
 
-        const resp = await fetch(`http://127.0.0.1:80/ablation`, {
-          method: "POST",
-          headers: {
-              "Content-Type": "application/json"
-        },
-          body: JSON.stringify({
-          cell_id: {{ cell.id }},
-          seq_no: 1,
-          model_id: {{ model.id }},
-          config: JSON.stringify({ head_n: heads, layer_n: parseInt(layer.value), prompt: document.getElementById('prompt-field').value })
+        data = await get_data(
+          JSON.stringify({
+            method: "ablation",
+            cell_id: {{ cell.id }},
+            seq_no: 1,
+            model_id: {{ model.id }},
+            config: JSON.stringify({ head_n: heads, layer_n: parseInt(layer.value), prompt: document.getElementById('prompt-field').value })
           })
-        });
-    
-        data = await resp.json();
+        );
       }
       else {
         const config = JSON.parse(data.method.config);
@@ -1029,21 +1058,18 @@
         .split(',')
         .map(s => Number(s.trim()));
 
-        const resp = await fetch(`http://127.0.0.1:80/actmap`, {
-          method: "POST",
-          headers: {
-              "Content-Type": "application/json"
-        },
-          body: JSON.stringify({
-              cell_id: {{ cell.id }},
-              seq_no: 1,
-              model_id: {{ model.id }},
-              config: JSON.stringify({ head_n: heads, layer_n: parseInt(layer.value), prompt: document.getElementById('prompt-field').value })
-              })
-        });
-
-        data = await resp.json();
+        data = await get_data(
+          JSON.stringify({
+            method: "actmap",
+            cell_id: {{ cell.id }},
+            seq_no: 1,
+            model_id: {{ model.id }},
+            config: JSON.stringify({ head_n: heads, layer_n: parseInt(layer.value), prompt: document.getElementById('prompt-field').value })
+          })
+        );
       };
+
+      console.log(data);
 
       document.getElementById("result-card").style.display = 'block';
       var res = `<p>Паттерны:<\p>
@@ -1067,20 +1093,15 @@
         .split(',')
         .map(s => Number(s.trim()));
 
-        const resp = await fetch(`http://127.0.0.1:80/logattr`, {
-          method: "POST",
-          headers: {
-              "Content-Type": "application/json"
-        },
-          body: JSON.stringify({
-              cell_id: {{ cell.id }},
-              seq_no: 1,
-              model_id: {{ model.id }},
-              config: JSON.stringify({ head_n: heads, layer_n: parseInt(document.getElementById('logattr-layer').value), prompt: document.getElementById('prompt-field').value })
-              })
-        });
-
-        data = await resp.json();
+        data = await get_data(
+          JSON.stringify({
+            method: "logattr",
+            cell_id: {{ cell.id }},
+            seq_no: 1,
+            model_id: {{ model.id }},
+            config: JSON.stringify({ head_n: heads, layer_n: parseInt(document.getElementById('logattr-layer').value), prompt: document.getElementById('prompt-field').value })
+          })
+        );
       };
       
       fig = JSON.parse(data.fig);
@@ -1095,23 +1116,18 @@
       if (data == null) {
         const input = document.getElementById('loglens-layer');
 
-        const resp = await fetch(`http://127.0.0.1:80/loglens`, {
-          method: "POST",
-          headers: {
-              "Content-Type": "application/json"
-        },
-          body: JSON.stringify({
-              cell_id: {{ cell.id }},
-              seq_no: 1,
-              model_id: {{ model.id }},
-              config: JSON.stringify({ layer_n: parseInt(input.value), prompt: document.getElementById('prompt-field').value })
-              })
-        });
-
-        data = await resp.json();
+        data = await get_data(
+          JSON.stringify({
+            method: "loglens",
+            cell_id: {{ cell.id }},
+            seq_no: 1,
+            model_id: {{ model.id }},
+            config: JSON.stringify({ layer_n: parseInt(input.value), prompt: document.getElementById('prompt-field').value })
+          })
+        );
       }
       
-      fig = JSON.parse(data.fig);;
+      fig = JSON.parse(data.fig);
 
       document.getElementById("result-preview").style.display = 'block';
       Plotly.newPlot("result-preview", fig.data, fig.layout);
@@ -1126,25 +1142,20 @@
         .split(',')
         .map(s => Number(s.trim()));
 
-        const resp = await fetch(`http://127.0.0.1:80/actpatch`, {
-          method: "POST",
-          headers: {
-              "Content-Type": "application/json"
-        },
-          body: JSON.stringify({
-              cell_id: {{ cell.id }},
-              seq_no: 1,
-              model_id: {{ model.id }},
-              config: JSON.stringify({ 
-                head_n: heads, 
-                layer_n: parseInt(document.getElementById('actpatch-layer').value), 
-                correct_prompt: document.getElementById('actpatch-correct').value,
-                corrupted_prompt: document.getElementById('actpatch-corrupted').value,
-                answer: document.getElementById('actpatch-answer').value })
-              })
-        });
-
-        data = await resp.json();
+        data = await get_data(
+          JSON.stringify({
+            method: "actpatch",
+            cell_id: {{ cell.id }},
+            seq_no: 1,
+            model_id: {{ model.id }},
+            config: JSON.stringify({ 
+              head_n: heads, 
+              layer_n: parseInt(document.getElementById('actpatch-layer').value), 
+              correct_prompt: document.getElementById('actpatch-correct').value,
+              corrupted_prompt: document.getElementById('actpatch-corrupted').value,
+              answer: document.getElementById('actpatch-answer').value })
+          })
+        );
       }
       
       fig = JSON.parse(data.fig);
@@ -1225,10 +1236,10 @@
     function translate(method_name) {
       switch (method_name) {
         case 'ablation': return 'Аблация';
-        case 'activation_map': return 'Карта активаций';
-        case 'logit_attribution': return 'Атрибуция логитов';
-        case 'logit_lens': return 'Логитные линзы';
-        case 'activation_patching': return 'Патчинг активаций';
+        case 'actmap': return 'Карта активаций';
+        case 'logattr': return 'Атрибуция логитов';
+        case 'loglens': return 'Логитные линзы';
+        case 'actpatch': return 'Патчинг активаций';
         
         case 'head_n': return 'Головы внимания';
         case 'layer_n': return 'Слои';
@@ -1252,10 +1263,10 @@
 
       switch (data.method.method_name) {
         case 'ablation': ablation(data); break;
-        case 'activation_map': actmap(data); break;
-        case 'logit_attribution': logattr(data); break;
-        case 'logit_lens': loglens(data); break;
-        case 'activation_patching': actpatch(data); break;
+        case 'actmap': actmap(data); break;
+        case 'logattr': logattr(data); break;
+        case 'loglens': loglens(data); break;
+        case 'actpatch': actpatch(data); break;
       }
     }
   </script>

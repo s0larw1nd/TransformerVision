@@ -46,10 +46,16 @@ class User(BaseModel):
     username: str
     password: str
 
-def check_password(psw):
+def check_password(
+    psw: str
+):
     return len(psw) > 3 and len(psw) < 64
 
-def get_user(idx=None, username=None, password=None):
+def get_user(
+    idx: int = None, 
+    username: str = None, 
+    password: str = None
+):
     if idx:
         q = f"SELECT * FROM users WHERE id={idx}"
     elif username:
@@ -71,7 +77,10 @@ async def get_file():
     return FileResponse("../templates/registration.html")
     
 @app.post("/register")
-async def register(username: Annotated[str, Form()], password: Annotated[str, Form()]):
+async def register(
+    username: Annotated[str, Form()], 
+    password: Annotated[str, Form()]
+):
     if check_password(password):
         with psycopg.connect("dbname=authdb user=user password=123 host=localhost port=5433") as conn:
             with conn.cursor() as cur:
@@ -87,11 +96,14 @@ async def register(username: Annotated[str, Form()], password: Annotated[str, Fo
 async def get_file():
     return FileResponse("../templates/login.html")
 @app.post("/login")
-async def login(username: Annotated[str, Form()], password: Annotated[str, Form()]):
+async def login(
+    username: Annotated[str, Form()], 
+    password: Annotated[str, Form()]
+):
     user = get_user(username=username, password=password)
     if not(user): return {"code": "Incorrect password"}
 
-    expire = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=15)
+    expire = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=30)
     
     token = jwt.encode(
         {"sub": str(user.idx), "exp": expire},
@@ -106,17 +118,21 @@ async def login(username: Annotated[str, Form()], password: Annotated[str, Form(
         httponly=True,
         secure=False,
         samesite="lax"
-    )   
+    )
     return response
 
 @app.get("/logout")
-async def logout(request: Request):
+async def logout(
+    request: Request
+):
     response = RedirectResponse(url="/", status_code=303)
     response.delete_cookie("access_token")
     return response
 
 @app.get("/user/{id}")
-async def get_info(id: int):
+async def get_info(
+    id: int
+):
     with psycopg.connect("dbname=authdb user=user password=123 host=localhost port=5433", row_factory=psycopg.rows.dict_row) as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -129,7 +145,9 @@ async def get_info(id: int):
     
     return user
 
-async def get_current_user(token: Annotated[str, Depends(OAuth2PasswordBearer(tokenUrl="token"))]):
+async def get_current_user(
+    token: Annotated[str, Depends(OAuth2PasswordBearer(tokenUrl="token"))]
+):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",

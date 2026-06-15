@@ -30,9 +30,6 @@ GPU_ID = args.gpu_id
 def to_numpy(
     tensor: t.Tensor
 ):
-    """
-    Helper function to convert a tensor to a numpy array. Also works on lists, tuples, and numpy arrays.
-    """
     if isinstance(tensor, np.ndarray):
         return tensor
     elif isinstance(tensor, (list, tuple)):
@@ -43,8 +40,12 @@ def to_numpy(
     elif isinstance(tensor, (int, float, bool, str)):
         return np.array(tensor)
     else:
-        raise ValueError(f"Input to to_numpy has invalid type: {type(tensor)}")
-def convert_tokens_to_string(model, tokens, batch_index=0):
+        raise ValueError(f"Invalid type: {type(tensor)}")
+def convert_tokens_to_string(
+    model: HookedTransformer,
+    tokens: t.Tensor, 
+    batch_index: int = 0
+):
     if len(tokens.shape) == 2:
         tokens = tokens[batch_index]
     return [f"|{model.tokenizer.decode(tok)}|_{c}" for (c, tok) in enumerate(tokens)]
@@ -322,12 +323,33 @@ def activation_patching(
 
     return content
 
+def linear_probe(
+    data: dict
+):
+    config = json.loads(data['config'])
+    
+    try:
+        model_name = rqsts.get(f"http://localhost:80/model/{data['model_id']}").json()["title"]
+    except Exception:
+        model_name = "Ошибка"
+        
+    device = t.device("mps" if t.backends.mps.is_available() else "cuda" if t.cuda.is_available() else "cpu")
+    model = HookedTransformer.from_pretrained(model_name, device=device)
+
+    prompt = config["prompt"]
+    tokens = model.to_tokens(prompt)
+    logits, cache = model.run_with_cache(tokens, remove_batch_dim=True)
+
+    res_stream = cache[f'blocks.{config["layer_n"]}.hook_resid_post']
+
+    print(res_stream.shape)
+
 async def main():
     connection = await aio_pika.connect_robust(
         "amqp://guest:guest@localhost/"
     )
 
-    channel = await connection.channel()
+    channel = await connection.channel(publisher_confirms=True)
 
     await channel.set_qos(prefetch_count=1)
 
@@ -344,7 +366,7 @@ async def main():
     async with queue.iterator() as q:
         async for message in q:
 
-            async with message.process():
+            async with message.process(requeue=True):
 
                 task = json.loads(message.body)
                 

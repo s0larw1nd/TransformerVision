@@ -38,7 +38,7 @@ async def rabbit_consumer(
     async with queue.iterator() as iterator:
         async for message in iterator:
             async with message.process():
-                results[message.correlation_id] = message.body
+                if message.correlation_id in results: results[message.correlation_id] = message.body
 
 @asynccontextmanager
 async def lifespan(
@@ -89,82 +89,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def to_numpy(
-    tensor: t.Tensor
-):
-    """
-    Helper function to convert a tensor to a numpy array. Also works on lists, tuples, and numpy arrays.
-    """
-    if isinstance(tensor, np.ndarray):
-        return tensor
-    elif isinstance(tensor, (list, tuple)):
-        array = np.array(tensor)
-        return array
-    elif isinstance(tensor, (t.Tensor, t.nn.parameter.Parameter)):
-        return tensor.detach().cpu().numpy()
-    elif isinstance(tensor, (int, float, bool, str)):
-        return np.array(tensor)
-    else:
-        raise ValueError(f"Input to to_numpy has invalid type: {type(tensor)}")
-def convert_tokens_to_string(model, tokens, batch_index=0):
-    if len(tokens.shape) == 2:
-        tokens = tokens[batch_index]
-    return [f"|{model.tokenizer.decode(tok)}|_{c}" for (c, tok) in enumerate(tokens)]
-
-@app.get("/parse")
-async def parse_config(
-    model_name: str
-):
-    layers = []
-    layers_full = {}
-    
-    device = t.device("mps" if t.backends.mps.is_available() else "cuda" if t.cuda.is_available() else "cpu")
-    model = HookedTransformer.from_pretrained("gpt2-small", device=device)
-    tokens = model.to_tokens("Hello world")
-    logits, cache = model.run_with_cache(tokens)
-    
-    model_layers = list(cache.keys())[::-1][:-2]
-    
-    current_block = None
-    seen_types = []
-
-    for layer in model_layers:
-        parts = layer.split(".")
-
-        if parts[0] != "blocks":
-            continue
-        if len(parts) < 3:
-            continue
-
-        block_id = int(parts[1])
-        if block_id not in layers_full: layers_full[block_id] = [] 
-        layers_full[block_id].insert(0, ".".join(parts[2:]))
-        layer_type = parts[2]
-
-        if block_id != current_block:
-            current_block = block_id
-            layers.append([])
-            seen_types = []
-        
-        if layer_type == "mlp":
-            key = "mlp"
-        elif layer_type == "attn":
-            key = "attn"
-        elif "ln" in layer_type:
-            key = "ln"
-        else:
-            continue
-        
-        if not(seen_types) or seen_types[-1] != key:
-            layers[-1].append((block_id, key))
-            seen_types.append(key)
-    
-    layer_full = layers_full[0][::-1]
-    
-    return {"layers": layer_full}
-
 @app.get("/results/{task_id}")
-async def results_event(task_id: str):
+async def results_event(
+    task_id: str
+):
     async def generator():
         while True:
             result = results.get(task_id)

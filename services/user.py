@@ -371,7 +371,12 @@ async def project_cell_model(
             """, (id_proj,))
             
             model_id = cur.fetchone()[0]
-            
+    
+    try:
+        model = requests.get(f"http://localhost:80/model/{model_id}").json()
+    except Exception:
+        raise Exception()
+
     context = {
         "experiment": {
             "id": id_exp,
@@ -381,12 +386,10 @@ async def project_cell_model(
         },
         "model": {
             "id": model_id,
-            "n_head": 12,
-            "n_layers": 12
+            "n_head": model["n_heads"],
+            "n_layers": model["n_layers"]
         },
-        "layers": ['hook_resid_post', 'hook_mlp_out', 'mlp.hook_post', 'mlp.hook_pre', 'ln2.hook_normalized', 'ln2.hook_scale', 
-                    'hook_resid_mid', 'hook_attn_out', 'attn.hook_z', 'attn.hook_pattern', 'attn.hook_attn_scores', 'attn.hook_v', 
-                    'attn.hook_k', 'attn.hook_q', 'ln1.hook_normalized', 'ln1.hook_scale', 'hook_resid_pre'][::-1],
+        "layers": model["layers"],
         "op_history": [],
         "metrics": [],
     }

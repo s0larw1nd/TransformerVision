@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Модель ML</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --panel: #f5f6f7;
+      --panel-2: #eef1f4;
+      --line: #d7dbe0;
+      --text: #111111;
+      --muted: #666666;
+      --soft: rgba(0, 0, 0, 0.08);
+      --soft2: rgba(0, 0, 0, 0.16);
+      --accent: #000000;
+      --active: #000000;
+      --shadow: 0 8px 30px rgba(0, 0, 0, 0.04);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: linear-gradient(180deg, #ffffff 0%, #fbfbfc 100%);
+      color: var(--text);
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto auto 1fr 28rem;
+      gap: 0;
+    }
+
+    .topbar, .subbar, .bottom {
+      border-bottom: 1px solid var(--line);
+    }
+
+    .topbar {
+      height: 58px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 18px;
+      background: rgba(255,255,255,0.95);
+      backdrop-filter: blur(10px);
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+
+    .title {
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      font-size: 15px;
+    }
+
+    .save-btn {
+      border: 1px solid #000;
+      background: #000;
+      color: #fff;
+      border-radius: 999px;
+      height: 34px;
+      padding: 0 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .subbar {
+      padding: 12px 18px;
+      background: linear-gradient(180deg, #fff 0%, #fafafa 100%);
+    }
+
+    .subbar-inner {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 14px;
+      align-items: center;
+    }
+
+    .prompt-wrap {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .prompt-input {
+      width: 100%;
+      min-width: 220px;
+      height: 40px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 0 14px;
+      outline: none;
+      font-size: 14px;
+      background: #fff;
+      color: var(--text);
+    }
+
+    .prompt-input::placeholder { color: #888; }
+
+    .toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      color: var(--text);
+      user-select: none;
+      white-space: nowrap;
+    }
+
+    .switch {
+      position: relative;
+      width: 52px;
+      height: 28px;
+      border-radius: 999px;
+      background: #111;
+      border: 1px solid #111;
+      padding: 2px;
+      cursor: pointer;
+      flex: 0 0 auto;
+    }
+
+    .knob {
+      position: absolute;
+      left: 2px;
+      top: 2px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #fff;
+      transition: transform 0.18s ease;
+    }
+
+    .switch[data-mode="features"] .knob {
+      transform: translateX(24px);
+    }
+
+    .mode-label {
+      font-weight: 600;
+    }
+
+    .main {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: 1fr;
+      position: relative;
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(247,248,250,0.8), rgba(250,251,252,0.92)),
+        repeating-linear-gradient(90deg, transparent 0 60px, rgba(0,0,0,0.02) 60px 61px),
+        repeating-linear-gradient(0deg, transparent 0 32px, rgba(0,0,0,0.025) 32px 33px);
+    }
+
+    .model-shell {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      padding: 10px 12px 0 12px;
+    }
+
+    .model-frame {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      border: 1px solid rgba(0,0,0,0.05);
+      border-radius: 0;
+      overflow: hidden;
+      background: linear-gradient(180deg, rgba(237,240,244,0.6), rgba(255,255,255,0.1));
+    }
+
+    .model-svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .tooltip {
+      position: absolute;
+      left: 0;
+      top: 0;
+      transform: translate(-9999px, -9999px);
+      pointer-events: none;
+      background: rgba(255,255,255,0.98);
+      border: 1px solid rgba(0,0,0,0.14);
+      box-shadow: var(--shadow);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 12px;
+      color: #111;
+      max-width: 220px;
+      line-height: 1.35;
+      z-index: 15;
+      white-space: nowrap;
+    }
+
+    .bottom {
+      display: grid;
+      grid-template-columns: 1fr 1fr 2fr;
+      min-height: 0;
+      background: #fff;
+    }
+
+    .panel {
+      min-width: 0;
+      border-right: 1px solid var(--line);
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      min-height: 0;
+      background: linear-gradient(180deg, #fff, #fafafa);
+    }
+
+    .panel:last-child { border-right: 0; }
+
+    .panel-head {
+      padding: 12px 14px;
+      font-size: 13px;
+      font-weight: 700;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .panel-body {
+      min-height: 0;
+      overflow: auto;
+      padding: 12px;
+    }
+
+    .panel-submenu {
+      border-top: 1px solid var(--line);
+      background: #fbfbfb;
+      padding: 12px;
+      min-height: 120px;
+    }
+
+    .stack {
+      display: grid;
+      gap: 8px;
+    }
+
+    .cell {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      padding: 0 12px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .cell:hover { border-color: #000; }
+
+    .cell .x {
+      width: 26px;
+      height: 26px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      background: #fff;
+      flex: 0 0 auto;
+    }
+
+    .cell.muted {
+      color: #555;
+      background: #fcfcfc;
+      border-style: dashed;
+    }
+
+    .field-grid {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: 1fr;
+      max-height: 100%;
+      overflow-y: auto;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+      font-size: 12px;
+      color: #444;
+    }
+
+    .field input, .field textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 11px;
+      font: inherit;
+      background: #fff;
+      color: #111;
+      resize: vertical;
+      min-height: 40px;
+    }
+
+    .field textarea[readonly], .field input[readonly] {
+      background: #f7f7f7;
+      color: #222;
+    }
+
+    .result-grid {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .result-card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+      min-height: 120px;
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+
+    .result-card iframe {
+      width: 100%;
+      min-height: 180px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+    }
+
+    .result-empty {
+      min-height: 100%;
+      border: 1px dashed var(--line);
+      border-radius: 16px;
+      display: grid;
+      place-items: center;
+      color: #777;
+      font-size: 13px;
+      background: linear-gradient(180deg, #fff, #fafafa);
+    }
+
+    .mini-title {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #666;
+      margin-bottom: 8px;
+    }
+
+    .btn-link {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: #111;
+      border-radius: 10px;
+      height: 34px;
+      padding: 0 12px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .btn-link:hover { border-color: #000; }
+
+    .selected {
+      box-shadow: inset 0 0 0 2px #000;
+    }
+
+    .top-note {
+      position: absolute;
+      right: 14px;
+      top: 14px;
+      font-size: 12px;
+      color: #666;
+      background: rgba(255,255,255,0.9);
+      border: 1px solid rgba(0,0,0,0.08);
+      border-radius: 999px;
+      padding: 6px 10px;
+      z-index: 2;
+    }
+
+    @media (max-width: 1100px) {
+      .bottom { grid-template-columns: 1fr; }
+      .panel { border-right: 0; border-bottom: 1px solid var(--line); }
+      .panel:last-child { border-bottom: 0; }
+      .app { grid-template-rows: auto auto minmax(36rem, 1fr) auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="title">Модель ML</div>
+      <button class="save-btn" id="saveBtn">Сохранить</button>
+    </header>
+
+    <section class="subbar">
+      <div class="subbar-inner">
+        <div class="prompt-wrap">
+          <input id="promptInput" class="prompt-input" placeholder="Введите промпт для модели..." />
+        </div>
+        <div class="toggle" title="Переключение режима визуализации">
+          <span class="mode-label" id="modeLabel">Головы внимания</span>
+          <div class="switch" id="modeSwitch" data-mode="attention" role="switch" aria-checked="false" tabindex="0">
+            <div class="knob"></div>
+          </div>
+          <span class="mode-label">Features</span>
+        </div>
+      </div>
+    </section>
+
+    <main class="main">
+      <div class="model-shell">
+        <div class="model-frame" id="modelFrame">
+          <svg class="model-svg" id="modelSvg" aria-label="Визуализация модели" preserveAspectRatio="none"></svg>
+          <div class="tooltip" id="tooltip"></div>
+        </div>
+      </div>
+    </main>
+
+    <section class="bottom">
+      <aside class="panel" id="historyPanel">
+        <div class="panel-head">
+          <span>История операций</span>
+          <button class="btn-link" id="clearHistoryBtn">Очистить</button>
+        </div>
+        <div class="panel-body" id="historyMain">
+          <div class="stack" id="historyList"></div>
+        </div>
+        <div class="panel-submenu" id="historySubmenu" style="display: None">
+          <div class="mini-title">Детали операции</div>
+          <div class="field-grid" id="historyFields"></div>
+        </div>
+      </aside>
+
+      <aside class="panel" id="toolsPanel">
+        <div class="panel-head">
+          <span>Список инструментов</span>
+        </div>
+        <div class="panel-body" id="toolsMain">
+          <div class="stack" id="toolsList">
+            <div class="cell" onclick="renderToolFields('actmap')">
+              Карта активаций
+            </div>
+            <div class="cell" onclick="renderToolFields('ablation')">
+              Аблация
+            </div>
+            <div class="cell" onclick="renderToolFields('logattr')">
+              Атрибуция логитов
+            </div>
+            <div class="cell" onclick="renderToolFields('loglens')">
+              Логитные линзы
+            </div>
+            <div class="cell" onclick="renderToolFields('actpatch')">
+              Патчинг активаций
+            </div>
+            <div class="cell" onclick="renderToolFields('linprob')">
+              Линейное пробирование
+            </div>
+          </div>
+        </div>
+        <div class="panel-submenu" id="toolsSubmenu" style="display: None">
+          <div class="mini-title" id="toolsSubmenu-mini-title">Параметры инструмента</div>
+          <div class="field-grid" id="toolsFields"></div>
+        </div>
+      </aside>
+
+      <section class="panel">
+        <div class="panel-head">
+          <span>Область результатов</span>
+        </div>
+        <div class="panel-body" id="resultsArea">
+          <div class="result-empty">Пока пусто. Здесь будут карты активаций, внимание и iframe-виджеты.</div>
+        </div>
+      </section>
+    </section>
+  </div>
+
+  <script>
+    const svg = document.getElementById('modelSvg');
+    const frame = document.getElementById('modelFrame');
+    const tooltip = document.getElementById('tooltip');
+    const modeSwitch = document.getElementById('modeSwitch');
+    const modeLabel = document.getElementById('modeLabel');
+    const toolsList = document.getElementById('toolsList');
+    const historyList = document.getElementById('historyList');
+    const toolsFields = document.getElementById('toolsFields');
+    const historyFields = document.getElementById('historyFields');
+    const resultsArea = document.getElementById('resultsArea');
+
+    const tokensTop = ['San', 'Oklahoma', 'Dallas', 'Houston', 'Fort', 'Texas', 'the', 'not', 'Austin'];
+    const tokensBottom = ['Dallas', 'is'];
+
+    const layerDefs = [
+      { name: 'Embeddings', type: 'square', count: 2 },
+      { name: 'Head 1', type: 'circle', count: 11 },
+      { name: 'Head 2', type: 'circle', count: 11 },
+      { name: 'Head 3', type: 'circle', count: 11 },
+      { name: 'Head 4', type: 'circle', count: 11 },
+      { name: 'Head 5', type: 'circle', count: 11 },
+      { name: 'Head 6', type: 'circle', count: 11 },
+      { name: 'Head 7', type: 'circle', count: 11 },
+      { name: 'Head 8', type: 'circle', count: 11 },
+      { name: 'Probabilities', type: 'square', count: 2 },
+    ];
+
+    const state = {
+      mode: 'attention',
+      selectedToken: 1,
+      selectedNode: null,
+      nodes: [],
+      matrices: [],
+      history: [],
+      toolIndex: 0,
+    };
+
+    const toolData = [
+      { name: 'Карта активаций', fields: ['Layer', 'Token', 'Threshold'] },
+      { name: 'Матрица внимания', fields: ['Query', 'Key', 'Value'] },
+      { name: 'Список слоёв', fields: ['Start layer', 'End layer', 'Mode'] },
+    ];
+
+    const historyData = [
+      { title: 'Запрос: "Dallas is"', status: 'готово', note: 'Топ-токен выбран' },
+      { title: 'Сравнение слоёв', status: 'выполнено', note: '12 узлов подсвечено' },
+      { title: 'Экспорт карты', status: 'сохранено', note: 'PNG + JSON' },
+    ];
+
+    const matrix = buildMatrices(12, 10);
+
+    function setMode(nextMode) {
+      state.mode = nextMode;
+      modeSwitch.dataset.mode = nextMode;
+      modeSwitch.setAttribute('aria-checked', String(nextMode === 'features'));
+      modeLabel.textContent = nextMode === 'attention' ? 'Головы внимания' : 'Features';
+      renderTools();
+      drawModelFromMatrix(matrix, 10, svg, frame);
+    }
+
+    function toggleMode() {
+      setMode(state.mode === 'attention' ? 'features' : 'attention');
+    }
+
+    function buildMatrices(heads, levels) {
+      const matrices = [];
+      for (let r = 0; r < heads * levels; r++) {
+        const m = [];
+        for (let i = 0; i < heads * levels; i++) {
+          const v = ((r + 1) * 17 + i * 7 + r * 11) % 10;
+          m.push(v / 10);
+        }
+        matrices.push(m);
+      }
+
+      return matrices;
+    }
+
+    function drawModelFromMatrix(matrix, levelCount, svg, frame, selectedTopIndex = 0) {
+      const w = frame.clientWidth;
+      const h = frame.clientHeight;
+
+      const padL = 54;
+      const padR = 24;
+      const padT = 54;
+      const padB = 38;
+
+      const innerW = w - padL - padR;
+      const innerH = h - padT - padB;
+
+      const totalNodes = matrix.length;
+      const headsPerLevel = Math.round(totalNodes / levelCount);
+
+      if (headsPerLevel * levelCount !== totalNodes) {
+        throw new Error('matrix.size must be divisible by levelCount');
+      }
+
+      const layerOf = (idx) => Math.floor(idx / headsPerLevel);
+      const posInLayer = (idx) => idx % headsPerLevel;
+
+      const tokenX = (pos) => padL + (pos + 0.5) * (innerW / headsPerLevel);
+      const layerY = (layer) => padT + (layer + 0.5) * (innerH / levelCount);
+
+      const isBoundaryLayer = (layer) => layer === 0 || layer === levelCount - 1;
+
+      const nodes = Array.from({ length: totalNodes }, (_, idx) => {
+        const layer = layerOf(idx);
+        const pos = posInLayer(idx);
+        return {
+          idx,
+          layer,
+          pos,
+          x: tokenX(pos),
+          y: layerY(layer),
+          square: isBoundaryLayer(layer),
+        };
+      });
+
+      const layerName = (layer) => {
+        if (layer === 0) return 'Embeddings';
+        if (layer === levelCount - 1) return 'Probabilities';
+        return `Layer ${layer}`;
+      };
+
+      const parts = [];
+      
+      for (let l = 0; l <= levelCount; l++) {
+        const y = padT + l * (innerH / levelCount);
+        parts.push(
+          `<line x1="0" y1="${y}" x2="${w}" y2="${y}" stroke="rgba(0,0,0,0.06)" stroke-width="1" />`
+        );
+      }
+
+      for (let l = 0; l < levelCount; l++) {
+        const y = layerY(l);
+        parts.push(
+          `<text x="10" y="${y + 4}" font-size="11" fill="rgba(0,0,0,0.6)">${layerName(l)}</text>`
+        );
+      }
+
+      // Связи: matrix[i][j] = сила связи между узлами i и j
+      for (let i = 0; i < totalNodes; i++) {
+        for (let j = 0; j < totalNodes; j++) {
+          const strength = Number(matrix[i]?.[j] ?? 0);
+          if (strength <= 0.80) continue;
+
+          const a = nodes[i];
+          const b = nodes[j];
+
+          const opacity = 0; //Math.max(0.03, Math.min(0.9, 0.08 + strength * 0.01));
+          const strokeWidth = 0.7 + strength * 1.4;
+
+          parts.push(
+            `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#000" stroke-opacity="${opacity}" stroke-width="${strokeWidth}" />`
+          );
+        }
+      }
+
+      // Узлы
+      nodes.forEach((n) => {
+        if (n.square) {
+          const size = 11;
+          const isSelectedTop = n.layer === levelCount - 1 && n.pos === selectedTopIndex;
+          parts.push(
+            `<rect class="node" x="${n.x - size / 2}" y="${n.y - size / 2}" width="${size}" height="${size}" fill="#fff" stroke="${isSelectedTop ? '#000' : 'rgba(0,0,0,0.5)'}" stroke-width="${isSelectedTop ? 3 : 1.2}" />`
+          );
+        } else {
+          const r = 4.25;
+          parts.push(
+            `<circle class="node" cx="${n.x}" cy="${n.y}" r="${r}" fill="#fff" stroke="rgba(0,0,0,0.45)" stroke-width="1" />`
+          );
+        }
+      });
+
+      svg.innerHTML = parts.join('');
+      bindNodeTooltips(svg, frame);
+    }
+
+    function bindNodeEvents() {
+      svg.querySelectorAll('.node').forEach(el => {
+        el.addEventListener('mouseenter', (e) => {
+          const x = Number(el.dataset.x);
+          const y = Number(el.dataset.y);
+          const layer = Number(el.dataset.layer);
+          const index = Number(el.dataset.index);
+          const isSquare = el.dataset.square === '1';
+          const modeText = state.mode === 'attention' ? 'голова внимания' : 'feature';
+          tooltip.innerHTML = `слой: ${layer + 1}<br>узел: ${index + 1}<br>тип: ${isSquare ? 'квадрат' : 'кружок'}<br>режим: ${modeText}`;
+          const rect = frame.getBoundingClientRect();
+          const left = x + 14;
+          const top = y - 6;
+          tooltip.style.transform = `translate(${Math.min(left, rect.width - 240)}px, ${Math.max(8, top)}px)`;
+        });
+        el.addEventListener('mouseleave', () => {
+          tooltip.style.transform = 'translate(-9999px, -9999px)';
+        });
+      });
+    }
+
+    function bindNodeTooltips(svg, frame) {
+      svg.querySelectorAll('.node circle, .node rect, .node').forEach((el) => {
+        console.log(el);
+        el.addEventListener('mouseenter', () => {
+          const x = Number(el.closest('.node')?.dataset.x || 0);
+          const y = Number(el.closest('.node')?.dataset.y || 0);
+          const layer = Number(el.closest('.node')?.dataset.layer || 0);
+          const index = Number(el.closest('.node')?.dataset.index || 0);
+
+          tooltip.innerHTML = `layer: ${layer}<br>head: ${index}<br>value: ${el.dataset.value ?? ''}`;
+          tooltip.style.transform = `translate(${x + 12}px, ${y - 8}px)`;
+        });
+
+        el.addEventListener('mousemove', (e) => {
+          const rect = frame.getBoundingClientRect();
+          const x = Math.min(e.clientX - rect.left + 12, rect.width - 180);
+          const y = Math.max(e.clientY - rect.top - 10, 8);
+          tooltip.style.transform = `translate(${x}px, ${y}px)`;
+        });
+
+        el.addEventListener('mouseleave', () => {
+          tooltip.style.transform = 'translate(-9999px, -9999px)';
+        });
+      });
+    }
+
+    function renderToolFields(tool) {
+      toolsFields.innerHTML = '';
+      var fields = [];
+      switch (tool) {
+        case 'actmap':
+          fields = ["Номер слоя", "Головы внимания"];
+          break;
+        case 'ablation':
+          fields = ["Номер слоя", "Головы внимания"];
+          break;
+        case 'logattr':
+          fields = ["Номер слоя", "Головы внимания"];
+          break;
+        case 'loglens':
+          fields = ["Номер слоя"];
+          break;
+        case 'actpatch':
+          fields = ["Корректный промпт", "Некорректный промпт", "Корректный прогноз", "Номер слоя", "Головы внимания"];
+          break;
+        case 'linprob':
+          fields = ["Номер слоя"];
+          break;
+      }
+      fields.forEach((field, i) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'field';
+        wrap.innerHTML = `<label>${field}</label><input />`;
+        toolsFields.appendChild(wrap);
+      });
+
+      const btnStart = document.createElement('button');
+      btnStart.className = 'btn-link';
+      btnStart.innerHTML = `Старт`;
+      toolsFields.appendChild(btnStart);
+
+      const btnCancel = document.createElement('button');
+      btnCancel.className = 'btn-link';
+      btnCancel.innerHTML = `Отмена`;
+      btnCancel.addEventListener('click', (e) => {
+        document.getElementById("toolsSubmenu").style.display = 'none';
+        document.getElementById("toolsMain").style.display = 'block';
+      });
+      toolsFields.appendChild(btnCancel);
+
+      document.getElementById("toolsSubmenu").style.display = 'block';
+      document.getElementById("toolsMain").style.display = 'none';
+      document.getElementById("toolsSubmenu-mini-title").innerHTML = `Параметры инструмента "${translate(tool)}"`;
+    }
+
+    function renderHistory() {
+      historyList.innerHTML = '';
+      if (!state.history.length) {
+        const empty = document.createElement('div');
+        empty.className = 'cell muted';
+        empty.textContent = 'История пуста';
+        historyList.appendChild(empty);
+      } else {
+        state.history.forEach((item, index) => {
+          const cell = document.createElement('div');
+          cell.className = 'cell';
+          cell.innerHTML = `<span>${item.title}</span><span class="x" data-remove="${index}">X</span>`;
+          cell.addEventListener('click', (e) => {
+            if (e.target && e.target.dataset.remove !== undefined) return;
+            renderHistoryFields(item);
+          });
+          cell.querySelector('.x').addEventListener('click', (e) => {
+            e.stopPropagation();
+            state.history.splice(index, 1);
+            renderHistory();
+          });
+          historyList.appendChild(cell);
+        });
+      }
+    }
+
+    function renderHistoryFields(item) {
+      historyFields.innerHTML = '';
+      const fields = [
+        { label: 'Запрос', value: item.title },
+        { label: 'Статус', value: item.status },
+        { label: 'Комментарий', value: item.note },
+      ];
+      fields.forEach(f => {
+        const wrap = document.createElement('div');
+        wrap.className = 'field';
+        wrap.innerHTML = `<label>${f.label}</label><textarea readonly>${f.value}</textarea>`;
+        historyFields.appendChild(wrap);
+      });
+      
+      const btnStart = document.createElement('button');
+      btnStart.className = 'btn-link';
+      btnStart.innerHTML = `Старт`;
+      historyFields.appendChild(btnStart);
+
+      const btnCancel = document.createElement('button');
+      btnCancel.className = 'btn-link';
+      btnCancel.innerHTML = `Отмена`;
+      btnCancel.addEventListener('click', (e) => {
+        document.getElementById("historySubmenu").style.display = 'none';
+        document.getElementById("historyMain").style.display = 'block';
+      });
+      historyFields.appendChild(btnCancel);
+
+      document.getElementById("historySubmenu").style.display = 'block';
+      document.getElementById("historyMain").style.display = 'none';
+    }
+
+    function mockResult() {
+      resultsArea.innerHTML = '';
+      const grid = document.createElement('div');
+      grid.className = 'result-grid';
+      grid.innerHTML = ``;
+      resultsArea.appendChild(grid);
+    }
+
+    function highlightTopSquare(index) {
+      state.selectedToken = Math.max(0, Math.min(tokensTop.length - 1, index));
+      drawModelFromMatrix(matrix, 10, svg, frame);
+    }
+
+    function addHistoryEntry() {
+      const i = state.history.length + 1;
+      state.history.unshift({
+        title: `Новая операция ${i}`,
+        status: 'в очереди',
+        note: 'Добавлено из интерфейса',
+      });
+      renderHistory();
+    }
+
+    document.getElementById('saveBtn').addEventListener('click', () => {
+      alert('Сохранено');
+    });
+
+    document.getElementById('clearHistoryBtn').addEventListener('click', () => {
+      state.history = [];
+      renderHistory();
+      historyFields.innerHTML = '';
+    });
+
+    function translate(method_name) {
+      switch (method_name) {
+        case 'ablation': return 'Аблация';
+        case 'actmap': return 'Карта активаций';
+        case 'logattr': return 'Атрибуция логитов';
+        case 'loglens': return 'Логитные линзы';
+        case 'actpatch': return 'Патчинг активаций';
+        case 'linprob': return 'Линейное пробирование';
+        
+        case 'head_n': return 'Головы внимания';
+        case 'layer_n': return 'Слои';
+        case 'prompt': return 'Промпт';
+
+        default: return method_name;
+      }
+    }
+
+    window.highlightTopSquare = highlightTopSquare;
+    window.selectToken = highlightTopSquare;
+
+    // Initial state
+    state.history = [...historyData];
+    renderHistory();
+    mockResult();
+    drawModelFromMatrix(matrix, 10, svg, frame);
+
+    // keep model responsive
+    const ro = new ResizeObserver(() => drawModelFromMatrix(matrix, 10, svg, frame));
+    ro.observe(frame);
+  </script>
+</body>
+</html>

@@ -164,3 +164,8 @@ async def get_current_user(
     if user is None:
         raise credentials_exception
     return user
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("auth:app", port=82, log_level="info", reload=True)

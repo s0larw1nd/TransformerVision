@@ -395,5 +395,10 @@ async def project_cell_model(
     }
     
     return templates.TemplateResponse(
-        request=request, name="model.html", context=context
+        request=request, name="model_new.html", context=context
     )
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("user:app", port=83, log_level="info", reload=True)

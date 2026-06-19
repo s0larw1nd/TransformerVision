@@ -157,3 +157,8 @@ async def add_model(
     
     except Exception:
         return {"status": 500}
+    
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("model:app", port=84, log_level="info", reload=True)

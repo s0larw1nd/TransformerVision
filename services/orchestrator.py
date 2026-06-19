@@ -254,3 +254,8 @@ async def from_history(
             content["fig"] = f.read()
 
     return Response(content=json.dumps(content | operation['text_json']), media_type="application/json")
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("orchestrator:app", port=81, log_level="info", reload=True)

@@ -101,9 +101,13 @@ def ablation(
     logits = model(tokens, return_type="logits")
     loss_no_ablation = -get_log_probs(logits, tokens)[:, -(seq_len - 1) :].mean()
     
-    for i, head_idx in enumerate(config["head_n"]):
+    layers = config["layer_n"]
+    heads = config["head_n"]
+    if len(layers) == 1: layers *= len(heads)
+
+    for i, head_idx in enumerate(heads):
         temp_hook_fn = functools.partial(head_zero_ablation_hook, head_index_to_ablate=head_idx)
-        ablated_logits = model.run_with_hooks(tokens, fwd_hooks=[(utils.get_act_name("z", config["layer_n"]), temp_hook_fn)])
+        ablated_logits = model.run_with_hooks(tokens, fwd_hooks=[(utils.get_act_name("z", layers[i]), temp_hook_fn)])
         loss = -get_log_probs(ablated_logits, tokens)[:, -(seq_len - 1) :].mean()
     
         ablation_scores[i] = loss - loss_no_ablation
@@ -112,7 +116,7 @@ def ablation(
     
     fig = imshow(
         ablation_scores,
-        y=config["head_n"],
+        y=[f"{l}.{h}" for l,h in zip(layers, heads)],
         labels={"y": "Голова внимания", "color": "Logit diff"},
         title="Изменения значения функции потерь после аблации",
         text_auto=".2f",

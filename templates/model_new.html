@@ -909,6 +909,18 @@
             chosen = null;
           }
           drawModel();
+
+          const head_input = document.getElementById("head-n");
+          if (head_input) {
+            if (!head_input.value) head_input.value = el.getAttribute("data-idx");
+            else head_input.value += `,${el.getAttribute("data-idx")}`;
+          }
+
+          const layer_input = document.getElementById("layer-n");
+          if (layer_input) {
+            if (!layer_input.value) layer_input.value = el.getAttribute("data-level");
+            else layer_input.value += `,${el.getAttribute("data-level")}`;
+          }
         });
       });
     }
@@ -965,7 +977,7 @@
         const type = fields.types[i];
         const wrap = document.createElement('div');
         wrap.className = 'field';
-        if (type == "text") wrap.innerHTML = `<label>${name}</label><input type="text" />`;
+        if (type == "text") wrap.innerHTML = `<label>${name}</label><input id=${translate(name)} type="text" />`;
         else if (type == "file") wrap.innerHTML = `<label>${name}</label><input type="file" accept=".txt" />`;
         toolsFields.appendChild(wrap);
       }
@@ -1066,8 +1078,8 @@
       clearHistory();
     });
 
-    function translate(method_name) {
-      switch (method_name) {
+    function translate(name) {
+      switch (name) {
         case 'ablation': return 'Аблация';
         case 'actmap': return 'Карта активаций';
         case 'logattr': return 'Атрибуция логитов';
@@ -1079,7 +1091,13 @@
         case 'layer_n': return 'Слои';
         case 'prompt': return 'Промпт';
 
-        default: return method_name;
+        case 'Номер слоя': return 'layer-n';
+        case 'Головы внимания': return 'head-n';
+        case 'Корректный промпт': return 'correct-prompt';
+        case 'Некорректный промпт': return 'incorrect-prompt';
+        case 'Корректный прогноз': return 'correct-token';
+
+        default: return name;
       }
     }
 
@@ -1130,14 +1148,19 @@
 
     async function ablation(data = null) {
       var heads = null;
+      var layers = null;
       if (data == null) {
         const target = document.getElementById("btnStart");
         
         const items = Array.from(target.parentElement.children);
         const index = items.indexOf(target);
 
-        const layer = parseInt(items[index - 2].lastChild.value);
+        layers = items[index - 2].lastChild.value
+        .replaceAll(/\s*,\s*/g, ",")
+        .split(',')
+        .map(s => Number(s.trim()));
         heads = items[index - 1].lastChild.value
+        .replaceAll(/\s*,\s*/g, ",")
         .split(',')
         .map(s => Number(s.trim()));
 
@@ -1147,13 +1170,14 @@
             cell_id: {{ cell.id }},
             seq_no: 1,
             model_id: {{ model.id }},
-            config: JSON.stringify({ head_n: heads, layer_n: layer, prompt: promptField.value })
+            config: JSON.stringify({ head_n: heads, layer_n: layers, prompt: promptField.value })
           })
         );
       }
       else {
         const config = JSON.parse(data.method.config);
         heads = config.head_n;
+        layers = config.layer_n;
       };
 
       fig = JSON.parse(data.fig);
@@ -1161,10 +1185,19 @@
       clearSpace();
       document.getElementById("result-empty").style.display = 'none';
       document.getElementById("result-card").style.display = 'block';
+
       var res = '<p>Изменения функции потерь:<\p>'
-      heads.forEach((head, index) => {
-        res += `<p>Г.В. ${head}: ${data.scores[index]}<\p>`
-      });
+      if (layers.length == 1) {
+        heads.forEach((head, index) => {
+          res += `<p>Г.В. ${head}: ${data.scores[index]}<\p>`
+        });
+      }
+      else {
+        heads.forEach((head, index) => {
+          console.log()
+          res += `<p>Г.В. ${layers[index]}.${head}: ${data.scores[index]}<\p>`
+        });
+      }
       
       document.getElementById("result-card").innerHTML = res;
       document.getElementById("result-preview").style.display = 'block';

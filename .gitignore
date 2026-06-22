@@ -1,6 +1,8 @@
-/__pycache__
-/stored
 /venv
 /tests
-/services/__pycache__
-services/__pycache__/
+/services/orchestrator/stored
+/services/auth/__pycache__
+/services/model/__pycache__
+/services/orchestrator/__pycache__
+/services/user/__pycache__
+/worker/__pycache__

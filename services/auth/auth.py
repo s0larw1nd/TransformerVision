@@ -1,20 +1,20 @@
 from contextlib import asynccontextmanager
 import datetime
 import os
-import time
 from dotenv import load_dotenv
 from fastapi import *
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.staticfiles import StaticFiles
+from fastapi.security import HTTPBearer
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordBearer
 import jwt
 import psycopg
 from pydantic import BaseModel
 from typing import Annotated
 
-load_dotenv("../secret.env")
+load_dotenv("../../secret.env")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -31,13 +31,19 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(lifespan=lifespan)
-templates = Jinja2Templates(directory="../templates")
+templates = Jinja2Templates(directory="templates")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.mount(
+    "/static",
+    StaticFiles(directory="static"),
+    name="static"
+)
+
 security = HTTPBearer()
 SECRET_KEY = os.getenv("SECRET_KEY")
 
@@ -73,11 +79,14 @@ def get_user(
             return None
 
 @app.get("/")
-async def get_file():
-    return FileResponse("../templates/registration.html")
+async def get_file(
+    request: Request
+):
+    return templates.TemplateResponse(request, "registration.html")
     
 @app.post("/register")
 async def register(
+    request: Request,
     username: Annotated[str, Form()], 
     password: Annotated[str, Form()]
 ):
@@ -88,15 +97,18 @@ async def register(
                     f"INSERT INTO users (username, password) VALUES ('{username}', '{password}')"
                 )
                 conn.commit()
-        return FileResponse("../templates/registration_success.html")
+        return templates.TemplateResponse(request, "registration_success.html")
     else:
-        return FileResponse("../templates/registration_failure.html")
+        return templates.TemplateResponse(request, "registration_failure.html")
 
 @app.get("/login")
-async def get_file():
-    return FileResponse("../templates/login.html")
+async def get_file(
+    request: Request
+):
+    return templates.TemplateResponse(request, "login.html")
 @app.post("/login")
 async def login(
+    request: Request,
     username: Annotated[str, Form()], 
     password: Annotated[str, Form()]
 ):

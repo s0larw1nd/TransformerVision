@@ -6,20 +6,9 @@ import json
 import os
 import uuid
 from fastapi import *
-from fastapi.responses import FileResponse, RedirectResponse, JSONResponse
 from fastapi.sse import EventSourceResponse
 import psycopg
-from transformer_lens import HookedTransformer, utils
-import torch as t
-import circuitsvis as cv
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import einops
-import functools
-from plotly.express import imshow
-import numpy as np
-import requests as rqsts
-import plotly.io as pio
 import aio_pika
 from pathlib import Path
 
@@ -106,7 +95,7 @@ async def results_event(
                 if data:
                     figures_saved = {} 
                     if "fig" in data:
-                        output_file = Path(f"../stored/{task_id}.json")
+                        output_file = Path(f"./stored/{task_id}.json")
                         output_file.parent.mkdir(exist_ok=True, parents=True)
 
                         with open(output_file, "w", encoding="utf-8") as f:
@@ -326,8 +315,8 @@ async def delete_history(
             """, (id,))
 
             operation = cur.fetchone()
-            if operation['artifacts_refs_json']['fig'] and os.path.exists(f"../stored/{operation['artifacts_refs_json']['fig']}"):
-                os.remove(f"../stored/{operation['artifacts_refs_json']['fig']}")
+            if operation['artifacts_refs_json']['fig'] and os.path.exists(f"./stored/{operation['artifacts_refs_json']['fig']}"):
+                os.remove(f"./stored/{operation['artifacts_refs_json']['fig']}")
 
         conn.commit()
 
@@ -362,7 +351,7 @@ async def from_history(
     
     artifacts = operation.get('artifacts_refs_json')
     if artifacts and artifacts.get('fig'):
-        with open(f"../stored/{operation['artifacts_refs_json']['fig']}", "r", encoding="utf-8") as f:
+        with open(f"./stored/{operation['artifacts_refs_json']['fig']}", "r", encoding="utf-8") as f:
             content["fig"] = f.read()
 
     return Response(content=json.dumps(content | operation['text_json']), media_type="application/json")

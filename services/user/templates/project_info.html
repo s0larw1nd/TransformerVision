@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Проект</title>
+  <link rel="stylesheet" href="/user/static/css/project_info.css">
+</head>
+<body>
+  <main class="page">
+    <div class="shell">
+      <header class="topbar">
+        <div class="title-wrap">
+          <span class="eyebrow">Проекты</span>
+          <h1>{{ project.title }}</h1>
+        </div>
+        <button class="back-btn" id="btn-back" type="button">Назад</button>
+      </header>
+
+      <section class="panel">
+        <div class="project-head">
+          <div class="project-main">
+            <div class="project-title-row">
+              <h2 class="project-name">{{ project.title }}</h2>
+              <span class="project-badge public"><span class="{{'dot' if not(is_private) else 'red-dot'}}"></span> {{ 'Публичный' if not(project.is_private) else 'Закрытый' }}</span>
+            </div>
+
+            <div class="description">
+              {{ project.description }}
+            </div>
+
+            <div class="meta-grid">
+              <div class="meta-item">
+                <span class="meta-label">Модель ML</span>
+                <span class="meta-value">{{ project.model_id }}</span>
+              </div>
+
+              <div class="meta-item">
+                <span class="meta-label">Статус</span>
+                <span class="meta-value status-line">
+                  <span class="status-pill public">{{ project.status }}</span>
+                </span>
+              </div>
+
+              <div class="meta-item">
+                <span class="meta-label">Дата создания</span>
+                <span class="meta-value">{{ project.created_at.strftime("%d.%m.%Y") }}</span>
+              </div>
+
+              <div class="meta-item">
+                <span class="meta-label">Время последнего изменения</span>
+                <span class="meta-value">{{ project.updated_at.strftime("%d.%m.%Y %H:%M") }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="meta-item">
+            <span class="meta-label">Участники</span>
+            <div class="participants">
+              {% for member in project.members %}
+                <span class="participant">{{ member }}</span>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel experiments-panel">
+        <div class="section-header">
+          <h2>Эксперименты</h2>
+          <button class="action-btn primary-btn" id="btn-create-experiment" type="button">+ Создать новый</button>
+        </div>
+
+        <div class="experiment-list">
+          {% for experiment in experiments %}
+            <article class="experiment-card" name="article" data-experiment-id="{{ experiment.id }}">
+              <div class="experiment-cell">
+                <span class="experiment-label">Название</span>
+                <span class="experiment-value">{{ experiment.title }}</span>
+              </div>
+
+              <div class="experiment-cell">
+                <span class="experiment-label">Описание</span>
+                <span class="experiment-value experiment-desc">
+                  {{ experiment.description }}
+                </span>
+              </div>
+
+              <div class="experiment-cell">
+                <span class="experiment-label">Дата создания</span>
+                <span class="experiment-value">{{ experiment.created_at.strftime("%d.%m.%Y") }}</span>
+              </div>
+
+              <div class="experiment-cell">
+                <span class="experiment-label">Создатель</span>
+                <span class="experiment-value">{{ experiment.created_by }}</span>
+              </div>
+
+              <div class="experiment-cell">
+                <span class="experiment-label">Статус</span>
+                <span class="experiment-value"><span class="experiment-status open">Открыт</span></span>
+              </div>
+
+              <button class="delete-btn" type="button">Удалить</button>
+            </article>
+          {% endfor %}
+
+          <div class="empty-card">Место для добавления новых экспериментов</div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const projectId = {{ project.id }};
+  </script>
+
+  <script src="/user/static/js/project_info.js"></script>
+</body>
+</html>

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Создание проекта</title>
+  <link rel="stylesheet" href="/user/static/css/create_project.css">
+</head>
+<body>
+  <main class="page">
+    <div class="shell">
+      <header class="topbar">
+        <div class="title-wrap">
+          <span class="eyebrow">Проекты</span>
+          <h1>Создание проекта</h1>
+        </div>
+        <button class="back-btn" type="button">Назад</button>
+      </header>
+
+      <section class="panel">
+        <form action="/project/create" method="POST">
+          <div class="form-grid">
+            <div class="field full">
+              <label for="title">Название</label>
+              <input id="title" name="title" type="text" placeholder="Введите название проекта" />
+            </div>
+
+            <div class="field full">
+              <label for="description">Описание</label>
+              <textarea id="description" name="description" placeholder="Коротко опишите цель, особенности и ожидаемый результат"></textarea>
+            </div>
+
+            <div class="field">
+              <label for="model">Модель</label>
+              <select id="model" name="model">
+                <option value="">Выберите модель</option>
+                {% for m in models %}
+                  <option value="{{ m.id }}">{{ m.title }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="field">
+              <label>Видимость</label>
+              <div class="checkbox-row">
+                <input id="public" name="is_private" value="true" type="checkbox" />
+                <span>Сделать проект приватным</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button class="secondary-btn" type="button">Отмена</button>
+            <button class="primary-btn" type="submit">Создать проект</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

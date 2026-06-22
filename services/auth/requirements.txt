@@ -1,0 +1,8 @@
+dotenv==0.9.9
+fastapi==0.136.1
+PyJWT==2.12.1
+psycopg==3.3.4
+psycopg-binary==3.3.4
+pydantic==2.12.5
+uvicorn==0.46.0
+python-multipart==0.0.27

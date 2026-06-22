@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <link rel="stylesheet" href="/auth/static/css/login.css">
+</head>
+<body>
+  <div class="register-wrap">
+    <div class="register-card">
+      <h1 class="register-title">Вход</h1>
+      <p class="register-subtitle">Используйте аккаунт для входа в систему.</p>
+
+      <form class="register-form" action="/login" method="POST">
+        <div class="field">
+          <label for="username">Логин:</label><br>
+          <input type="text" id="username" name="username" required>
+        </div>
+
+        <div class="field">
+          <label for="password">Пароль:</label><br>
+          <input type="password" id="password" name="password" required>
+        </div>
+
+        <button type="submit">Войти</button>
+        <a class="login-link" href="/">Зарегистрироваться</a>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

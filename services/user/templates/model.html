@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ML модель</title>
+  <link rel="stylesheet" href="/user/static/css/model.css">
+
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+  <main class="page">
+    <div class="shell">
+      <header class="panel topbar">
+        <div class="title-wrap">
+          <span class="eyebrow">ML модель</span>
+          <h1>Окно взаимодействия с моделью</h1>
+        </div>
+        <div class="actions">
+          <button class="btn primary" type="button" id="btn-save">Сохранить</button>
+          <button class="btn" type="button" id="btn-reset">Сбросить</button>
+        </div>
+      </header>
+
+      <section class="grid">
+        <div class="col left-col">
+          <section class="panel section results-area">
+            <div class="section-head">
+              <h2>Область результатов операций</h2>
+            </div>
+
+            <div class="result-card" id="result-card" style="display: none;">
+              Результат операции в виде div. Здесь может быть текст, сводка или компактная карточка вывода.
+            </div>
+
+            <div class="result-preview" id="result-preview-iframe" style="display: none;">
+              <iframe id="result-iframe" srcdoc='<!DOCTYPE html><html lang="ru"><body style="margin:0;font-family:system-ui;background:#fff;display:flex;align-items:center;justify-content:center;height:100%;color:#6b7280;"><div></div></body></html>'></iframe>
+            </div>
+
+            <div class="result-preview">
+                <div id="result-preview" style="height: 500px; display: none;"></div>
+            </div>
+          </section>
+
+          <section class="panel section">
+            <div class="section-head">
+              <h2>История операций</h2>
+              <span class="section-subtle">Элементов: <span id="history-count">1</span></span>
+            </div>
+            <div class="history-list" id="history-list">
+              <div class="history-item">
+                <div class="text">Запущена атрибуция логитов для слоя 6.</div>
+                <div class="x">×</div>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel section">
+            <div class="section-head">
+              <h2>Метрики</h2>
+              <span class="section-subtle">Элементов: 1</span>
+            </div>
+            <div class="metrics-table">
+              <div class="metric-add">Добавить метрику</div>
+            </div>
+          </section>
+        </div>
+
+        <div class="col center-col">
+          <section class="panel section filterbar">
+            <div class="section-head">
+              <h2>Степень приближения</h2>
+            </div>
+            <div class="filter-content">
+              <div class="dropdown-row">
+                <select style="flex: 3" id="scope-general">
+                  <option>Модель</option>
+                  <option>Слой</option>
+                </select>
+                <select class="small" style="flex: 1; display: none;" id="scope-layer"></select>
+                <select class="small" style="flex: 1; display: none;" id="scope-head"></select>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel section model-view">
+            <div class="section-head">
+              <h2>Схема модели</h2>
+            </div>
+            <div class="model-diagram">
+              <div class="node">Входные токены</div>
+              <div class="arrow">↓</div>
+              <div class="node">Эмбеддинги</div>
+              <div class="arrow">↓</div>
+              {% for l in range(model.n_layers) %}
+                <div class="node">Слой {{l+1}} · Attention + MLP</div>
+                <div class="arrow">↓</div>
+              {% endfor %}
+              <div class="node">Layernorm</div>
+              <div class="arrow">↓</div>
+              <div class="node">Выходные логиты</div>
+              <div class="arrow">↓</div>
+              <div class="node">Softmax</div>
+              <div class="arrow">↓</div>
+              <div class="node">Выходные вероятности</div>
+            </div>
+          </section>
+
+          <section class="panel prompt-panel">
+            <div class="prompt-head">
+              <div>
+                <h2>Поле промпта</h2>
+              </div>
+              <div class="prompt-switches">
+                <button class="btn mini-button-chosen" type="button">Текст</button>
+                <button class="btn mini-button" type="button">Таблица</button>
+              </div>
+            </div>
+
+            <div class="prompt-layout">
+              <div class="prompt-editor" style="width: 100%;">
+                <textarea id="prompt-field" placeholder="Введите промпт...">Пример промпта для модели.</textarea>
+                <div style="display: none;">
+                    <div class="table-toolbar">
+                        <button class="btn mini-button" type="button">+ Ряд</button>
+                        <button class="btn mini-button" type="button">+ Поле</button>
+                        </div>
+                        <div class="table-preview">
+                        <div class="row">
+                            <div>Колонка 1</div>
+                            <div>Колонка 2</div>
+                            <div>Колонка 3</div>
+                            <div></div>
+                        </div>
+                        <div class="row">
+                            <div class="cell-box"></div>
+                            <div class="cell-box"></div>    
+                            <div class="cell-box"></div>
+                            <div class="x">×</div>
+                        </div>
+                        </div>
+                        <div class="table-add">Добавить строку таблицы</div>
+                        <div class="field-stack">
+                            <div class="field-box">
+                                Доп. поля для режима таблицы или связанных настроек.
+                            </div>
+                            <div class="field-box">
+                                Ещё одна зона для дополнительных параметров выбранного режима.
+                            </div>
+                        </div>
+                    </div>
+                </div>  
+            </div>
+          </section>
+        </div>
+
+        <div class="col right-col">
+          <section class="panel section">
+            <div class="section-head">
+              <h2>Список инструментов</h2>
+            </div>
+            <div class="tool-list">
+              <div id="actmap-slot">
+                <div class="tool-row" id="actmap">Карта активаций</div>
+                <div class="submenu">
+                  <input type="text" id="actmap-heads" placeholder="Головы внимания">
+                  <button id="btn-actmap">Отправить</button>
+                </div>
+              </div>
+              <div id="ablation-slot">
+                <div class="tool-row" id="ablation">Аблация</div>
+                <div class="submenu">
+                  <input type="text" id="ablation-heads" placeholder="Головы внимания">
+                  <button id="btn-ablation">Отправить</button>
+                </div>
+              </div>
+              <div id="logattr-slot">
+                <div class="tool-row" id="logattr">Атрибуция логитов</div>
+                <div class="submenu">
+                  <input type="text" id="logattr-layer" placeholder="Номер слоя">
+                  <input type="text" id="logattr-heads" placeholder="Головы внимания">
+                  <button id="btn-logattr">Отправить</button>
+                </div>
+              </div>
+              <div id="loglens-slot">
+                <div class="tool-row" id="loglens">Логитные линзы</div>
+                <div class="submenu">
+                  <input type="text" id="loglens-layer" placeholder="Номер слоя">
+                  <button id="btn-loglens">Отправить</button>
+                </div>
+              </div>
+              <div id="actpatch-slot">
+                <div class="tool-row" id="actpatch">Патчинг активаций</div>
+                <div class="submenu">
+                  <input type="text" id="actpatch-correct" placeholder="Корректный промпт">
+                  <input type="text" id="actpatch-corrupted" placeholder="Некорректный промпт">
+                  <input type="text" id="actpatch-answer" placeholder="Корректный прогноз">
+
+                  <input type="text" id="actpatch-layer" placeholder="Номер слоя">
+                  <input type="text" id="actpatch-heads" placeholder="Головы внимания">
+                  <button id="btn-actpatch">Отправить</button>
+                </div>
+              </div>
+              <div id="linprob-slot">
+                <div class="tool-row" id="linprob">Линейное пробирование</div>
+                <div class="submenu">
+                  <input type="text" placeholder="Имя">
+                  <button id="btn-linprob">Отправить</button>
+                </div>
+              </div>
+              <div id="sae-slot">
+                <div class="tool-row" id="sae">SAE</div>
+                <div class="submenu">
+                  <input type="text" placeholder="Имя">
+                  <button id="btn-sae">Отправить</button>
+                </div>
+              </div>
+              <div id="funcvec-slot">
+                <div class="tool-row" id="funcvec">Функциональные векторы</div>
+                <div class="submenu">
+                  <input type="text" placeholder="Имя">
+                  <button id="btn-funcvec">Отправить</button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const model_heads = {{ model.n_head }};
+    const model_layers = {{ model.n_layers }};
+    const cellId = {{ cell.id }};
+    const modelId = {{ model.id }};
+  </script>
+
+  <script src="/user/static/js/model.js"></script>
+</body>
+</html>

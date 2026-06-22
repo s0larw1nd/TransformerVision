@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Эксперимент</title>
+  <link rel="stylesheet" href="/user/static/css/notebook.css">
+</head>
+<body>
+  <main class="page">
+    <div class="shell">
+      <header class="topbar">
+        <div class="title-wrap">
+          <span class="eyebrow">Эксперименты</span>
+          <h1>{{ experiment.title }}</h1>
+          <div class="desc">
+            {{ experiment.description }}
+          </div>
+          <div class="status-row">
+            <span class="status-pill"><span class="dot"></span> Активный</span>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn primary" type="button">Завершить эксперимент</button>
+          <button class="btn" id="btn-back" type="button">Назад</button>
+          <button class="btn danger" type="button">Удалить эксперимент</button>
+        </div>
+      </header>
+
+      <section class="panel">
+        <div class="notebook">
+          <div class="insert-zone" id="insert-zone-first">
+            <div class="insert-actions">
+              <button class="btn insert-small" id="btn-insert-text-first" type="button">+ Текстовая ячейка</button>
+              <button class="btn insert-small" id="btn-insert-model-first" type="button">+ Модельная ячейка</button>
+            </div>
+          </div>
+          
+          {% for cell in cells %}
+              {% if cell.type == 'TEXT' %}
+                <article class="cell" id="cell-{{ cell.id }}" data-type="TEXT">
+                  <div class="cell-header">
+                    <span class="cell-type"><span class="marker"></span> Текстовая ячейка</span>
+                    <div class="cell-actions">
+                      <button class="btn cell-btn" type="button">Скрыть</button>
+                      <button class="btn cell-btn danger" type="button">Удалить</button>
+                    </div>
+                  </div>
+                  <div class="cell-content">
+                    {{ cell.stext }}
+                  </div>
+                </article>
+              {% elif cell.type == 'MODEL' %}
+                <article class="cell" id="cell-{{ cell.id }}" data-type="MODEL">
+                  <div class="cell-header">
+                    <span class="cell-type"><span class="marker"></span> Модельная ячейка</span>
+                    <div class="cell-actions">
+                      <button class="btn cell-btn" type="button">Скрыть</button>
+                      <button class="btn cell-btn danger" type="button">Удалить</button>
+                    </div>
+                  </div>
+
+                  <div class="model-cell">
+                    <a class="model-link" href="/project/{{ experiment.project_id }}/experiment/{{ experiment.id }}/cell/{{ cell.id }}/model">Открыть UI работы с моделью</a>
+                    <div class="empty-note">Метрики не добавлены</div>
+                  </div>
+                </article>
+              {% endif %}
+
+            <div class="insert-zone" id="insert-zone-{{ cell.id }}">
+              <div class="insert-actions">
+                <button class="btn insert-small" id="btn-insert-text-after" name="btn-insert-text" type="button" data-cell-id="{{ cell.id }}">+ Текстовая ячейка</button>
+                <button class="btn insert-small" id="btn-insert-model-after" name="btn-insert-model" type="button" data-cell-id="{{ cell.id }}">+ Модельная ячейка</button>
+              </div>
+            </div>
+          {% endfor %}
+        
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const data = {{ cells | tojson }};
+    const projectId = {{ experiment.project_id }};
+    const experimentId = {{ experiment.id }};
+  </script>
+
+  <script src="/user/static/js/notebook.js"></script>
+</body>
+</html>

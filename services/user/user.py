@@ -1,9 +1,9 @@
 import datetime
 from typing import Annotated, List
 from fastapi import *
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
-import json
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import jwt
@@ -13,7 +13,7 @@ import os
 from pydantic import BaseModel
 import requests
 
-load_dotenv("../secret.env")
+load_dotenv("../../secret.env")
 
 @asynccontextmanager
 async def lifespan(
@@ -61,12 +61,17 @@ async def lifespan(
     yield
 
 app = FastAPI(lifespan=lifespan)
-templates = Jinja2Templates(directory="../templates")
+templates = Jinja2Templates(directory="templates")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
+)
+app.mount(
+    "/static",
+    StaticFiles(directory="static"),
+    name="static"
 )
 
 credentials_exception = HTTPException(
@@ -152,7 +157,9 @@ async def profile(
         "projects": projects
     }
 
-    return templates.TemplateResponse(request, name="profile.html", context=context)
+    return templates.TemplateResponse(
+        request, name="profile.html", context=context
+    )
 
 @app.get("/project/create")
 async def create_project(

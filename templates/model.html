@@ -699,8 +699,6 @@
                 <select style="flex: 3" id="scope-general" onchange="change_scope()">
                   <option>Модель</option>
                   <option>Слой</option>
-                  <option>Голова внимания</option>
-                  <option>Нейрон</option>
                 </select>
                 <select class="small" style="flex: 1; display: none;" id="scope-layer"></select>
                 <select class="small" style="flex: 1; display: none;" id="scope-head"></select>
@@ -918,9 +916,9 @@
           document.getElementById("logattr-slot").style.display = 'none';
           document.getElementById("loglens-slot").style.display = 'none';
           document.getElementById("actpatch-slot").style.display = 'block';
-          document.getElementById("linprob-slot").style.display = 'block';
-          document.getElementById("sae-slot").style.display = 'block';
-          document.getElementById("funcvec-slot").style.display = 'block';
+          document.getElementById("linprob-slot").style.display = 'none';
+          document.getElementById("sae-slot").style.display = 'none';
+          document.getElementById("funcvec-slot").style.display = 'none';
         }
         else if (general == "Слой") {
           layer.style.display = 'block';
@@ -940,38 +938,15 @@
 
           diagram.innerHTML = html;
 
-          document.getElementById("actmap-slot").style.display = 'none';
-          document.getElementById("ablation-slot").style.display = 'none';
-          document.getElementById("logattr-slot").style.display = 'none';
+          document.getElementById("actmap-slot").style.display = 'block';
+          document.getElementById("ablation-slot").style.display = 'block';
+          document.getElementById("logattr-slot").style.display = 'block';
           document.getElementById("loglens-slot").style.display = 'block';
           document.getElementById("actpatch-slot").style.display = 'none';
           document.getElementById("linprob-slot").style.display = 'none';
           document.getElementById("sae-slot").style.display = 'none';
           document.getElementById("funcvec-slot").style.display = 'none';
         }
-        else if (general == "Голова внимания") {
-          layer.style.display = 'block';
-          head.style.display = 'block';
-          for (let i = 0; i < model_layers; i++) {
-            layer.add(new Option(i, i));
-          }
-          for (let i = 0; i < model_heads; i++) {
-            head.add(new Option(i, i));
-          }
-
-          document.getElementById("actmap-slot").style.display = 'block';
-          document.getElementById("ablation-slot").style.display = 'block';
-          document.getElementById("logattr-slot").style.display = 'block';
-          document.getElementById("loglens-slot").style.display = 'none';
-          document.getElementById("actpatch-slot").style.display = 'none';
-          document.getElementById("linprob-slot").style.display = 'none';
-          document.getElementById("sae-slot").style.display = 'none';
-          document.getElementById("funcvec-slot").style.display = 'none';
-        }
-      else if (general == "Нейрон") {
-        layer.style.display = 'block';
-        head.style.display = 'block';
-      }
     }
 
     function show(id) {

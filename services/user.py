@@ -354,6 +354,50 @@ async def project_cells_sync(
 
         conn.commit()
 
+@app.get("/project/{id_proj}/experiment/{id_exp}/cell/{id_cell}/model/struct")
+async def project_cell_model(
+    request: Request, 
+    id_proj: int, 
+    id_exp: int, 
+    id_cell: int,
+    idx: int = Depends(get_current_user)
+):
+    with psycopg.connect("dbname=userdb user=user password=123 host=localhost port=5435") as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT model_id
+                FROM projects
+                WHERE id=%s
+            """, (id_proj,))
+            
+            model_id = cur.fetchone()[0]
+    
+    try:
+        model = requests.get(f"http://localhost:80/model/{model_id}").json()
+    except Exception:
+        raise Exception()
+
+    context = {
+        "experiment": {
+            "id": id_exp,
+        },
+        "cell": {
+            "id": id_cell,
+        },
+        "model": {
+            "id": model_id,
+            "n_head": model["n_heads"],
+            "n_layers": model["n_layers"]
+        },
+        "layers": model["layers"],
+        "op_history": [],
+        "metrics": [],
+    }
+    
+    return templates.TemplateResponse(
+        request=request, name="model.html", context=context
+    )
+
 @app.get("/project/{id_proj}/experiment/{id_exp}/cell/{id_cell}/model")
 async def project_cell_model(
     request: Request, 

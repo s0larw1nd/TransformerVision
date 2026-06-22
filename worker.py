@@ -8,6 +8,7 @@ from fastapi import *
 from fastapi.responses import FileResponse, RedirectResponse, JSONResponse
 import psycopg
 from transformer_lens import HookedTransformer, utils
+from transformer_lens.utils import get_act_name
 import torch as t
 import circuitsvis as cv
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,12 +21,23 @@ import requests as rqsts
 import plotly.io as pio
 import aio_pika
 from pathlib import Path
+from transformer_lens.model_bridge import TransformerBridge
+import struct
+import base64
+from torch.utils.data import TensorDataset, DataLoader, random_split
+from sklearn.metrics import f1_score
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--gpu-id", type=int, required=True)
 args = parser.parse_args()
 
-GPU_ID = args.gpu_id
+device = t.device(
+            "mps"
+            if t.backends.mps.is_available()
+            else f"cuda:{args.gpu_id}"
+            if t.cuda.is_available()
+            else "cpu"
+        )
 
 def to_numpy(
     tensor: t.Tensor
@@ -50,6 +62,7 @@ def convert_tokens_to_string(
         tokens = tokens[batch_index]
     return [f"|{model.tokenizer.decode(tok)}|_{c}" for (c, tok) in enumerate(tokens)]
 
+@t.no_grad()
 def ablation(
     data: dict
 ):
@@ -71,13 +84,12 @@ def ablation(
         z[:, :, head_index_to_ablate, :] = 0.0
         
     config = json.loads(data['config'])
-    
+
     try:
         model_name = rqsts.get(f"http://localhost:80/model/{data['model_id']}").json()["title"]
     except Exception:
         model_name = "Ошибка"
     
-    device = t.device("mps" if t.backends.mps.is_available() else "cuda" if t.cuda.is_available() else "cpu")
     model = HookedTransformer.from_pretrained(model_name, device=device)
     prompt = config["prompt"]
     
@@ -113,6 +125,7 @@ def ablation(
 
     return content
 
+@t.no_grad()
 def activation_map(
     data: dict  
 ):
@@ -123,7 +136,6 @@ def activation_map(
     except Exception:
         model_name = "Ошибка"
     
-    device = t.device("mps" if t.backends.mps.is_available() else "cuda" if t.cuda.is_available() else "cpu")
     model = HookedTransformer.from_pretrained(model_name, device=device)
     prompt = config["prompt"]
     
@@ -169,6 +181,7 @@ def activation_map(
 
     return content
 
+@t.no_grad()
 def logit_attribution(
     data: dict
 ):
@@ -179,7 +192,6 @@ def logit_attribution(
     except Exception:
         model_name = "Ошибка"
 
-    device = t.device("mps" if t.backends.mps.is_available() else "cuda" if t.cuda.is_available() else "cpu")
     model = HookedTransformer.from_pretrained(model_name, device=device)
     prompt = config["prompt"]
     
@@ -211,9 +223,6 @@ def logit_attribution(
         y=y_labels,
         labels={"x": "Term", "y": "Position", "color": "logit"},
         title="Атрибуция логитов",
-        #height=100 + (30 if title else 0) + 15 * len(y_labels),
-        #width=24 * len(x_labels),
-        #return_fig=True,
     )
     
     content = {
@@ -222,6 +231,7 @@ def logit_attribution(
 
     return content
 
+@t.no_grad()
 def logit_lens(
     data: dict
 ):
@@ -232,7 +242,6 @@ def logit_lens(
     except Exception:
         model_name = "Ошибка"
     
-    device = t.device("mps" if t.backends.mps.is_available() else "cuda" if t.cuda.is_available() else "cpu")
     model = HookedTransformer.from_pretrained(model_name, device=device)
     prompt = config["prompt"]
     
@@ -253,9 +262,6 @@ def logit_lens(
         y=convert_tokens_to_string(model, correct_tokens),
         labels={"y": "Position", "color": "logit"},
         title="Логитные линзы",
-        #height=100 + (30 if title else 0) + 15 * len(y_labels),
-        #width=24 * len(x_labels),
-        #return_fig=True,
     )
     
     content = {
@@ -264,6 +270,7 @@ def logit_lens(
 
     return content
 
+@t.no_grad()
 def activation_patching(
     data: dict
 ):
@@ -274,7 +281,6 @@ def activation_patching(
     except Exception:
         model_name = "Ошибка"
         
-    device = t.device("mps" if t.backends.mps.is_available() else "cuda" if t.cuda.is_available() else "cpu")
     model = HookedTransformer.from_pretrained(model_name, device=device)
 
     prompt_clean = config["correct_prompt"].strip()
@@ -311,9 +317,6 @@ def activation_patching(
         x=convert_tokens_to_string(model, correct_tokens),
         labels={"x": "Токен", "y": "Промпт", "color": "logit"},
         title="Атрибуция логитов",
-        #height=100 + (30 if title else 0) + 15 * len(y_labels),
-        #width=24 * len(x_labels),
-        #return_fig=True,
     )
     
     content = {
@@ -326,6 +329,145 @@ def activation_patching(
 def linear_probe(
     data: dict
 ):
+    def make_labels(tokens, correct_tokens):
+        labels = t.zeros_like(tokens, dtype=t.bool)
+        for i in range(tokens.shape[0]):
+            labels[i] = t.isin(tokens[i], correct_tokens[i])
+        return labels.float()
+
+    def from_jagged(array, pad_value=-1):
+        max_len = max(len(row) for row in array)
+        padded = [row + [pad_value] * (max_len - len(row)) for row in array]
+        return t.tensor(padded, dtype=t.long)
+
+    def find_prompt_tokens_for_string(model, prompt: str, correct: str):
+        if not correct:
+            return []
+
+        start = prompt.find(correct)
+        if start == -1: raise ValueError("ERROR")
+        end = start + len(correct)
+
+        encoded = model.tokenizer(
+            prompt,
+            add_special_tokens=False,
+            return_offsets_mapping=True,
+        )
+
+        input_ids = encoded["input_ids"]
+        offsets = encoded["offset_mapping"]
+
+        if input_ids and isinstance(input_ids[0], list):
+            input_ids = input_ids[0]
+            offsets = offsets[0]
+
+        result = []
+        for token_id, (tok_start, tok_end) in zip(input_ids, offsets):
+            if tok_end > start and tok_start < end:
+                result.append(int(token_id))
+
+        return result
+
+    config = json.loads(data['config'])
+
+    prompts = config["prompts"].split("\r\n")
+
+    try:
+        model_name = rqsts.get(f"http://localhost:80/model/{data['model_id']}").json()["title"]
+    except Exception:
+        model_name = "Ошибка"
+        
+    model = HookedTransformer.from_pretrained(model_name, device=device)
+
+    correct_tokens = from_jagged([find_prompt_tokens_for_string(model, pr, cor) for pr,cor in zip(prompts, config["correct"].split("\r\n"))])
+
+    enc = model.tokenizer(prompts, padding=True, return_tensors="pt")
+    tokens = enc["input_ids"].to(device)
+    attention_mask = enc["attention_mask"].bool().to(device)
+
+    _, cache = model.run_with_cache(tokens)
+    res_stream = cache[f"blocks.{config["layer_n"]}.hook_resid_post"]
+
+    labels = make_labels(tokens, correct_tokens)
+
+    valid = attention_mask
+    X = res_stream[valid]
+    y = labels[valid].unsqueeze(1)
+
+    dataset = TensorDataset(X, y)
+
+    train_size = int(0.8 * len(dataset))
+    test_size = len(dataset) - train_size
+
+    g = t.Generator().manual_seed(42)
+    train_dataset, test_dataset = random_split(dataset, [train_size, test_size], generator=g)
+
+    train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=128, shuffle=False)
+
+    X_train = t.stack([train_dataset[i][0] for i in range(len(train_dataset))])
+    mean = X_train.mean(dim=0, keepdim=True)
+    std = X_train.std(dim=0, keepdim=True).clamp_min(1e-6)
+
+    def normalize_batch(x):
+        return (x - mean) / std
+
+    probe = t.nn.Linear(X.shape[1], 1).to(device)
+
+    y_train = t.stack([train_dataset[i][1] for i in range(len(train_dataset))]).to(device)
+    pos = y_train.sum()
+    neg = len(y_train) - pos
+    pos_weight = (neg / pos).clamp_min(1.0) if pos > 0 else t.tensor(1.0, device=device)
+
+    criterion = t.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    optimizer = t.optim.Adam(probe.parameters(), lr=1e-3)
+
+    num_epochs = 1000
+    for _ in range(num_epochs):
+        for xb, yb in train_loader:
+            xb = normalize_batch(xb.to(device))
+            yb = yb.to(device)
+
+            logits = probe(xb)
+            loss = criterion(logits, yb)
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+    all_preds = []
+    all_targets = []
+    probe.eval()
+
+    with t.no_grad():
+        for xb, yb in test_loader:
+            xb = normalize_batch(xb.to(device))
+            yb = yb.to(device)
+            logits = probe(xb)
+            probs = t.sigmoid(logits)
+            preds = (probs > 0.5).int()
+
+            all_preds.extend(preds.cpu().numpy())
+            all_targets.extend(yb.cpu().numpy())
+
+    content = {
+        "f1": f1_score(all_targets, all_preds)
+    }
+
+    return content
+
+@t.no_grad()
+def qk_ov_composition_matrix_bytes(
+    data: dict
+):
+    device = t.device(
+            "mps"
+            if t.backends.mps.is_available()
+            else f"cuda:{args.gpu_id}"
+            if t.cuda.is_available()
+            else "cpu"
+        )
+    
     config = json.loads(data['config'])
     
     try:
@@ -333,16 +475,100 @@ def linear_probe(
     except Exception:
         model_name = "Ошибка"
         
-    device = t.device("mps" if t.backends.mps.is_available() else "cuda" if t.cuda.is_available() else "cpu")
     model = HookedTransformer.from_pretrained(model_name, device=device)
 
-    prompt = config["prompt"]
-    tokens = model.to_tokens(prompt)
-    logits, cache = model.run_with_cache(tokens, remove_batch_dim=True)
+    tokens = model.to_tokens(config["prompt"])
+    _, cache = model.run_with_cache(tokens, remove_batch_dim=True)
 
-    res_stream = cache[f'blocks.{config["layer_n"]}.hook_resid_post']
+    L = model.cfg.n_layers
+    H = model.cfg.n_heads
 
-    print(res_stream.shape)
+    q0 = cache[get_act_name("q", 0, "attn")]
+    T = q0.shape[0]
+    device = q0.device
+    dtype = q0.dtype
+
+    P = L * H
+    N = T * P
+    out = t.empty((N, N), device=device, dtype=dtype)
+
+    z_proj = [[None] * H for _ in range(L)]
+    q_all = [[None] * H for _ in range(L)]
+
+    for l in range(L):
+        attn = model.blocks[l].attn
+        z_l = cache[get_act_name("z", l, "attn")]
+        q_l = cache[get_act_name("q", l, "attn")]
+
+        for h in range(H):
+            z_proj[l][h] = z_l[:, h] @ attn.W_O[h]
+            q_all[l][h] = q_l[:, h]
+
+    token_ids = t.arange(T, device=device)
+
+    for l1 in range(L):
+        for h1 in range(H):
+            src = z_proj[l1][h1]
+            lh1 = l1 * H + h1
+
+            for l2 in range(L):
+                attn2 = model.blocks[l2].attn
+                for h2 in range(H):
+                    q = q_all[l2][h2]
+                    delta_k = src @ attn2.W_K[h2]
+
+                    scores = (q @ delta_k.T) / (
+                        q.norm(dim=-1, keepdim=True) * delta_k.norm(dim=-1).unsqueeze(0) + 1e-8
+                    )
+
+                    lh2 = l2 * H + h2
+
+                    rows = token_ids * P + lh1
+                    cols = token_ids * P + lh2
+                    out[rows[:, None], cols[None, :]] = scores
+
+    M = t.where(out > 0.50, out, 0)
+
+    csr = M.to_sparse_csr()
+
+    n = M.shape[0]
+    nnz = csr.values().numel()
+
+    header = struct.pack(
+        "<ii",
+        n,
+        nnz
+    )
+
+    body = b"".join([
+        csr.crow_indices()
+            .cpu()
+            .numpy()
+            .astype("int32")
+            .tobytes(),
+
+        csr.col_indices()
+            .cpu()
+            .numpy()
+            .astype("int32")
+            .tobytes(),
+
+        csr.values()
+            .cpu()
+            .numpy()
+            .astype("float32")
+            .tobytes()
+    ])
+
+    content = {
+        "tokens": model.to_str_tokens(tokens),
+        "tokens_n": T,
+        "layers_n": L,
+        "heads_n": H,
+        "result": base64.b64encode(header + body).decode("ascii")
+    }
+
+    return content
 
 async def main():
     connection = await aio_pika.connect_robust(
@@ -368,21 +594,29 @@ async def main():
 
             async with message.process(requeue=True):
 
-                task = json.loads(message.body)
-                
-                match task["method"]:
-                    case "ablation": 
-                        result = ablation(task)
-                    case "actmap":
-                        result = activation_map(task)
-                    case "logattr":
-                        result = logit_attribution(task)
-                    case "loglens":
-                        result = logit_lens(task)
-                    case "actpatch":
-                        result = activation_patching(task)
-                    case _:
-                        raise ValueError("Unknown type")
+                try:
+                    task = json.loads(message.body)
+                    
+                    match task["method"]:
+                        case "ablation": 
+                            result = ablation(task)
+                        case "actmap":
+                            result = activation_map(task)
+                        case "logattr":
+                            result = logit_attribution(task)
+                        case "loglens":
+                            result = logit_lens(task)
+                        case "actpatch":
+                            result = activation_patching(task)
+                        case "linprob":
+                            result = linear_probe(task)
+                        case "composition":
+                            result = qk_ov_composition_matrix_bytes(task)
+                        case _:
+                            raise ValueError("Unknown type")
+                except Exception as e:
+                    print(f"ERROR: {e}")
+                    result = {}
 
                 await channel.default_exchange.publish(
                     aio_pika.Message(

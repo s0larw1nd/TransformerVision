@@ -75,7 +75,7 @@ def ablation(
     config = json.loads(data['config'])
 
     try:
-        model_name = rqsts.get(f"http://localhost:80/model/{data['model_id']}").json()["title"]
+        model_name = rqsts.get(f"http://nginx:80/model/{data['model_id']}").json()["title"]
     except Exception:
         model_name = "Ошибка"
     
@@ -125,7 +125,7 @@ def activation_map(
     config = json.loads(data['config'])
     
     try:
-        model_name = rqsts.get(f"http://localhost:80/model/{data['model_id']}").json()["title"]
+        model_name = rqsts.get(f"http://nginx:80/model/{data['model_id']}").json()["title"]
     except Exception:
         model_name = "Ошибка"
     
@@ -181,7 +181,7 @@ def logit_attribution(
     config = json.loads(data['config'])
     
     try:
-        model_name = rqsts.get(f"http://localhost:80/model/{data['model_id']}").json()["title"]
+        model_name = rqsts.get(f"http://nginx:80/model/{data['model_id']}").json()["title"]
     except Exception:
         model_name = "Ошибка"
 
@@ -231,7 +231,7 @@ def logit_lens(
     config = json.loads(data['config'])
     
     try:
-        model_name = rqsts.get(f"http://localhost:80/model/{data['model_id']}").json()["title"]
+        model_name = rqsts.get(f"http://nginx:80/model/{data['model_id']}").json()["title"]
     except Exception:
         model_name = "Ошибка"
     
@@ -270,7 +270,7 @@ def activation_patching(
     config = json.loads(data['config'])
     
     try:
-        model_name = rqsts.get(f"http://localhost:80/model/{data['model_id']}").json()["title"]
+        model_name = rqsts.get(f"http://nginx:80/model/{data['model_id']}").json()["title"]
     except Exception:
         model_name = "Ошибка"
         
@@ -366,7 +366,7 @@ def linear_probe(
     prompts = config["prompts"].split("\r\n")
 
     try:
-        model_name = rqsts.get(f"http://localhost:80/model/{data['model_id']}").json()["title"]
+        model_name = rqsts.get(f"http://nginx:80/model/{data['model_id']}").json()["title"]
     except Exception:
         model_name = "Ошибка"
         
@@ -464,7 +464,7 @@ def qk_ov_composition_matrix_bytes(
     config = json.loads(data['config'])
     
     try:
-        model_name = rqsts.get(f"http://localhost:80/model/{data['model_id']}").json()["title"]
+        model_name = rqsts.get(f"http://nginx:80/model/{data['model_id']}").json()["title"]
     except Exception:
         model_name = "Ошибка"
         
@@ -565,7 +565,7 @@ def qk_ov_composition_matrix_bytes(
 
 async def main():
     connection = await aio_pika.connect_robust(
-        "amqp://guest:guest@localhost/"
+        "amqp://guest:guest@rabbitmq:5672/"
     )
 
     channel = await connection.channel(publisher_confirms=True)

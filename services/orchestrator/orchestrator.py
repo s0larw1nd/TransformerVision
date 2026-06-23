@@ -18,7 +18,7 @@ consumer_task = None
 results = {}
 
 async def rabbit_consumer(
-    connection: aio_pika.AbstractRobustConnection
+    connection
 ):
     channel = await connection.channel()
     queue = await channel.declare_queue(
@@ -36,7 +36,7 @@ async def rabbit_consumer(
 async def lifespan(
     app: FastAPI
 ):
-    with psycopg.connect("dbname=orchestratordb user=user password=123 host=localhost port=5434") as conn:
+    with psycopg.connect("dbname=orchestratordb user=user password=123 host=db-orchestrator port=5431") as conn:
         with conn.cursor() as cur:
             cur.execute("""
             CREATE TABLE IF NOT EXISTS experiments_runs (
@@ -61,7 +61,7 @@ async def lifespan(
             conn.commit()
 
     global rabbit_connection
-    rabbit_connection = await aio_pika.connect_robust("amqp://guest:guest@localhost/")
+    rabbit_connection = await aio_pika.connect_robust("amqp://guest:guest@rabbitmq:5672/")
 
     global consumer_task
     consumer_task = asyncio.create_task(rabbit_consumer(rabbit_connection))
@@ -103,7 +103,7 @@ async def results_event(
                         del data["fig"]
                         figures_saved['fig'] = f'{task_id}.json'
                     
-                    with psycopg.connect("dbname=orchestratordb user=user password=123 host=localhost port=5434") as conn:
+                    with psycopg.connect("dbname=orchestratordb user=user password=123 host=db-orchestrator port=5431") as conn:
                         with conn.cursor() as cur:
                             cur.execute(f"""
                                 UPDATE experiments_runs
@@ -129,7 +129,7 @@ async def results_event(
                     break
                     
                 else:
-                    with psycopg.connect("dbname=orchestratordb user=user password=123 host=localhost port=5434") as conn:
+                    with psycopg.connect("dbname=orchestratordb user=user password=123 host=db-orchestrator port=5431") as conn:
                         with conn.cursor() as cur:
                             cur.execute(f"""
                                 DELETE 
@@ -166,7 +166,7 @@ async def method(
         durable=True
     )
 
-    with psycopg.connect("dbname=orchestratordb user=user password=123 host=localhost port=5434") as conn:
+    with psycopg.connect("dbname=orchestratordb user=user password=123 host=db-orchestrator port=5431") as conn:
         with conn.cursor() as cur:
             cur.execute("""
                 INSERT INTO experiments_runs (
@@ -277,7 +277,7 @@ async def get_history(
     request: Request, 
     data: dict
 ):
-    with psycopg.connect("dbname=orchestratordb user=user password=123 host=localhost port=5434", row_factory=psycopg.rows.dict_row) as conn:
+    with psycopg.connect("dbname=orchestratordb user=user password=123 host=db-orchestrator port=5431", row_factory=psycopg.rows.dict_row) as conn:
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT id, method_name, config
@@ -299,7 +299,7 @@ async def delete_history(
     request: Request, 
     id: int
 ):
-    with psycopg.connect("dbname=orchestratordb user=user password=123 host=localhost port=5434", row_factory=psycopg.rows.dict_row) as conn:
+    with psycopg.connect("dbname=orchestratordb user=user password=123 host=db-orchestrator port=5431", row_factory=psycopg.rows.dict_row) as conn:
         with conn.cursor() as cur:
             cur.execute("""
                 DELETE
@@ -327,7 +327,7 @@ async def from_history(
     request: Request, 
     id: int
 ):
-    with psycopg.connect("dbname=orchestratordb user=user password=123 host=localhost port=5434", row_factory=psycopg.rows.dict_row) as conn:
+    with psycopg.connect("dbname=orchestratordb user=user password=123 host=db-orchestrator port=5431", row_factory=psycopg.rows.dict_row) as conn:
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT method_name, config

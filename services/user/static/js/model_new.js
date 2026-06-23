@@ -40,7 +40,7 @@ function toggleMode() {
 var MODEL = null;
 
 async function getMatrix() {
-    const resp = await fetch(`http://127.0.0.1:80/composition`, {
+    const resp = await fetch(`http://nginx:80/composition`, {
     method: "POST",
     headers: {
         "Content-Type": "application/json"
@@ -87,7 +87,7 @@ function nodeFromId(tstr) {
 }
 
 async function loadMatrix(task_id, data){
-    const r = await fetch(`http://127.0.0.1:80/composition/${task_id}/data`);
+    const r = await fetch(`http://nginx:80/composition/${task_id}/data`);
     const buffer = await r.arrayBuffer();
     const view = new DataView(buffer);
 
@@ -544,13 +544,13 @@ function renderHistory() {
 }
 
 async function deleteHistory(id) {
-    const resp = await fetch(`http://127.0.0.1:80/history/${id}/delete`, { method: "DELETE" });
+    const resp = await fetch(`http://nginx:80/history/${id}/delete`, { method: "DELETE" });
     await get_history();
 }
 
 async function clearHistory() {
     state.history.forEach(async (item, _) => {
-    await fetch(`http://127.0.0.1:80/history/${item.id}/delete`, { method: "DELETE" });
+    await fetch(`http://nginx:80/history/${item.id}/delete`, { method: "DELETE" });
     });
     state.history = [];
     renderHistory();
@@ -619,7 +619,7 @@ function translate(name) {
 async function get_data(
     body
 ) {
-    const resp = await fetch(`http://127.0.0.1:80/method`, {
+    const resp = await fetch(`http://nginx:80/method`, {
     method: "POST",
     headers: {
         "Content-Type": "application/json"
@@ -908,7 +908,7 @@ async function linprob(data = null) {
 }
 
 async function get_history() {
-    const resp = await fetch(`http://127.0.0.1:80/history`, {
+    const resp = await fetch(`http://nginx:80/history`, {
     method: "POST",
     headers: {
         "Content-Type": "application/json"
@@ -924,7 +924,7 @@ async function get_history() {
 }
 
 async function from_history(id) {
-    const resp = await fetch(`http://127.0.0.1:80/history/${id}`, {
+    const resp = await fetch(`http://nginx:80/history/${id}`, {
     method: "POST",
     headers: {
         "Content-Type": "application/json"

@@ -113,7 +113,7 @@ function show(id) {
 async function get_data(
     body
 ) {
-    const resp = await fetch(`http://127.0.0.1:80/method`, {
+    const resp = await fetch(`http://nginx:80/method`, {
     method: "POST",
     headers: {
         "Content-Type": "application/json"
@@ -302,7 +302,7 @@ async function actpatch(data = null) {
 }
 
 async function get_history() {
-    const resp = await fetch(`http://127.0.0.1:80/history`, {
+    const resp = await fetch(`http://nginx:80/history`, {
     method: "POST",
     headers: {
         "Content-Type": "application/json"
@@ -382,7 +382,7 @@ function translate(method_name) {
 
 async function from_history(id) {
     console.log(id);
-    const resp = await fetch(`http://127.0.0.1:80/history/${id}`, {
+    const resp = await fetch(`http://nginx:80/history/${id}`, {
     method: "POST",
     headers: {
         "Content-Type": "application/json"

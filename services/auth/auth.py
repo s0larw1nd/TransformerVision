@@ -1,7 +1,6 @@
 from contextlib import asynccontextmanager
 import datetime
 import os
-from dotenv import load_dotenv
 from fastapi import *
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -14,11 +13,9 @@ import psycopg
 from pydantic import BaseModel
 from typing import Annotated
 
-load_dotenv("../../secret.env")
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    with psycopg.connect("dbname=authdb user=user password=123 host=localhost port=5433") as conn:
+    with psycopg.connect("dbname=authdb user=user password=123 host=db-auth port=5432") as conn:
         with conn.cursor() as cur:
             cur.execute("""
             CREATE TABLE IF NOT EXISTS users (
@@ -69,7 +66,7 @@ def get_user(
         
     q += f" AND password='{password}';" if password else ";"
     
-    with psycopg.connect("dbname=authdb user=user password=123 host=localhost port=5433", row_factory=psycopg.rows.dict_row) as conn:
+    with psycopg.connect("dbname=authdb user=user password=123 host=db-auth port=5432", row_factory=psycopg.rows.dict_row) as conn:
         with conn.cursor() as cur:
             cur.execute(q)
             rows = cur.fetchall()
@@ -91,7 +88,7 @@ async def register(
     password: Annotated[str, Form()]
 ):
     if check_password(password):
-        with psycopg.connect("dbname=authdb user=user password=123 host=localhost port=5433") as conn:
+        with psycopg.connect("dbname=authdb user=user password=123 host=db-auth port=5432") as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     f"INSERT INTO users (username, password) VALUES ('{username}', '{password}')"
@@ -145,7 +142,7 @@ async def logout(
 async def get_info(
     id: int
 ):
-    with psycopg.connect("dbname=authdb user=user password=123 host=localhost port=5433", row_factory=psycopg.rows.dict_row) as conn:
+    with psycopg.connect("dbname=authdb user=user password=123 host=db-auth port=5432", row_factory=psycopg.rows.dict_row) as conn:
         with conn.cursor() as cur:
             cur.execute("""
             SELECT username

@@ -8,18 +8,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import jwt
 import psycopg
-from dotenv import load_dotenv
 import os
 from pydantic import BaseModel
 import requests
-
-load_dotenv("../../secret.env")
 
 @asynccontextmanager
 async def lifespan(
     app: FastAPI
 ):
-    with psycopg.connect("dbname=userdb user=user password=123 host=localhost port=5435") as conn:
+    with psycopg.connect("dbname=userdb user=user password=123 host=db-user port=5433") as conn:
         with conn.cursor() as cur:
             cur.execute("""
             CREATE TABLE IF NOT EXISTS projects (
@@ -103,7 +100,7 @@ async def profile(
     projects = []
     
     with psycopg.connect(
-        "dbname=userdb user=user password=123 host=localhost port=5435",
+        "dbname=userdb user=user password=123 host=db-user port=5433",
         row_factory=psycopg.rows.namedtuple_row
     ) as conn:
         with conn.cursor() as cur:
@@ -124,14 +121,14 @@ async def profile(
                 """, (proj.id,))
                 
                 try:
-                    model_name = requests.get(f"http://localhost:80/model/{proj.model_id}").json()["title"]
+                    model_name = requests.get(f"http://nginx:80/model/{proj.model_id}").json()["title"]
                 except Exception:
                     model_name = "Ошибка"
                 
                 members = []
                 try:
                     for m in cur.fetchall():
-                        members.append(requests.get(f"http://localhost:80/user/{m.user_id}").json()["username"])
+                        members.append(requests.get(f"http://nginx:80/user/{m.user_id}").json()["username"])
                 except Exception:
                     members = []
                 
@@ -150,7 +147,7 @@ async def profile(
                     }
                 )
     
-    username = requests.get(f"http://localhost:80/user/{idx}").json()["username"]
+    username = requests.get(f"http://nginx:80/user/{idx}").json()["username"]
     
     context = {
         "username": username,
@@ -166,7 +163,7 @@ async def create_project(
     request: Request,
     idx: int = Depends(get_current_user)
 ):
-    models = requests.get(f"http://localhost:80/model/").json()
+    models = requests.get(f"http://nginx:80/model/").json()
     context = {
         "models": models
     }
@@ -184,7 +181,7 @@ async def create_project(
     idx: int = Depends(get_current_user)
 ):
     with psycopg.connect(
-        "dbname=userdb user=user password=123 host=localhost port=5435",
+        "dbname=userdb user=user password=123 host=db-user port=5433",
     ) as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -206,7 +203,7 @@ async def project(
     idx: int = Depends(get_current_user)
 ):
     with psycopg.connect(
-        "dbname=userdb user=user password=123 host=localhost port=5435",
+        "dbname=userdb user=user password=123 host=db-user port=5433",
         row_factory=psycopg.rows.namedtuple_row
     ) as conn:
         with conn.cursor() as cur:
@@ -226,7 +223,7 @@ async def project(
             """, (id,))
             
             try:
-                model_name = requests.get(f"http://localhost:80/model/{proj_info.model_id}").json()["title"]
+                model_name = requests.get(f"http://nginx:80/model/{proj_info.model_id}").json()["title"]
             except Exception:
                 model_name = "Ошибка"
             
@@ -235,7 +232,7 @@ async def project(
             
             try:
                 for m in members_ids:
-                    members.append(requests.get(f"http://localhost:80/user/{m.user_id}").json()["username"])
+                    members.append(requests.get(f"http://nginx:80/user/{m.user_id}").json()["username"])
             except Exception:
                 members = []
             
@@ -263,7 +260,7 @@ async def project(
             experiments = []
             for exp in cur.fetchall():
                 try:
-                    created_by = requests.get(f"http://localhost:80/user/{exp.created_by}").json()["username"]
+                    created_by = requests.get(f"http://nginx:80/user/{exp.created_by}").json()["username"]
                 except Exception:
                     created_by = exp.created_by
                     
@@ -288,7 +285,7 @@ async def project(
     id_exp: int,
     idx: int = Depends(get_current_user)
 ):
-    with psycopg.connect("dbname=userdb user=user password=123 host=localhost port=5435", row_factory=psycopg.rows.dict_row) as conn:
+    with psycopg.connect("dbname=userdb user=user password=123 host=db-user port=5433", row_factory=psycopg.rows.dict_row) as conn:
         with conn.cursor() as cur:
             cur.execute("""
             SELECT *
@@ -322,7 +319,7 @@ async def create_experiment(
     id_proj: int,
     idx: int = Depends(get_current_user)
 ):
-    with psycopg.connect("dbname=userdb user=user password=123 host=localhost port=5435") as conn:
+    with psycopg.connect("dbname=userdb user=user password=123 host=db-user port=5433") as conn:
         with conn.cursor() as cur:
             cur.execute("""
                 INSERT INTO experiments 
@@ -347,7 +344,7 @@ async def project_cells_sync(
     cells: List[Cell],
     idx: int = Depends(get_current_user)
 ):
-    with psycopg.connect("dbname=userdb user=user password=123 host=localhost port=5435") as conn:
+    with psycopg.connect("dbname=userdb user=user password=123 host=db-user port=5433") as conn:
         with conn.cursor() as cur:
             for cell in cells:
                 cur.execute("""
@@ -369,7 +366,7 @@ async def project_cell_model(
     id_cell: int,
     idx: int = Depends(get_current_user)
 ):
-    with psycopg.connect("dbname=userdb user=user password=123 host=localhost port=5435") as conn:
+    with psycopg.connect("dbname=userdb user=user password=123 host=db-user port=5433") as conn:
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT model_id
@@ -380,7 +377,7 @@ async def project_cell_model(
             model_id = cur.fetchone()[0]
     
     try:
-        model = requests.get(f"http://localhost:80/model/{model_id}").json()
+        model = requests.get(f"http://nginx:80/model/{model_id}").json()
     except Exception:
         raise Exception()
 
@@ -413,7 +410,7 @@ async def project_cell_model(
     id_cell: int,
     idx: int = Depends(get_current_user)
 ):
-    with psycopg.connect("dbname=userdb user=user password=123 host=localhost port=5435") as conn:
+    with psycopg.connect("dbname=userdb user=user password=123 host=db-user port=5433") as conn:
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT model_id
@@ -424,7 +421,7 @@ async def project_cell_model(
             model_id = cur.fetchone()[0]
     
     try:
-        model = requests.get(f"http://localhost:80/model/{model_id}").json()
+        model = requests.get(f"http://nginx:80/model/{model_id}").json()
     except Exception:
         raise Exception()
 

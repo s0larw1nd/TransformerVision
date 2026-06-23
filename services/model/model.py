@@ -1,6 +1,5 @@
 from contextlib import asynccontextmanager
 from fastapi import *
-from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 import psycopg
 from transformer_lens.model_bridge import TransformerBridge
@@ -10,7 +9,7 @@ import torch as t
 async def lifespan(
     app: FastAPI
 ):
-    with psycopg.connect("dbname=modeldb user=user password=123 host=localhost port=5436") as conn:
+    with psycopg.connect("dbname=modeldb user=user password=123 host=db-model port=5434") as conn:
         with conn.cursor() as cur:
             cur.execute("""
             CREATE TABLE IF NOT EXISTS models (
@@ -41,7 +40,6 @@ async def lifespan(
     yield
 
 app = FastAPI(lifespan=lifespan)
-templates = Jinja2Templates(directory="../templates")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -53,7 +51,7 @@ app.add_middleware(
 async def get_info(
     id: int
 ):
-    with psycopg.connect("dbname=modeldb user=user password=123 host=localhost port=5436", row_factory=psycopg.rows.dict_row) as conn:
+    with psycopg.connect("dbname=modeldb user=user password=123 host=db-model port=5434", row_factory=psycopg.rows.dict_row) as conn:
         with conn.cursor() as cur:
             cur.execute("""
             SELECT *
@@ -67,7 +65,7 @@ async def get_info(
 
 @app.get("/model/")
 async def get_info():
-    with psycopg.connect("dbname=modeldb user=user password=123 host=localhost port=5436", row_factory=psycopg.rows.dict_row) as conn:
+    with psycopg.connect("dbname=modeldb user=user password=123 host=db-model port=5434", row_factory=psycopg.rows.dict_row) as conn:
         with conn.cursor() as cur:
             cur.execute("""
             SELECT *
@@ -138,7 +136,7 @@ async def add_model(
                 layers[-1].append((block_id, key))
                 seen_types.append(key)
 
-        with psycopg.connect("dbname=modeldb user=user password=123 host=localhost port=5436") as conn:
+        with psycopg.connect("dbname=modeldb user=user password=123 host=db-model port=5434") as conn:
             with conn.cursor() as cur:
                 cur.execute(f"""
                     INSERT INTO models (title,n_layers,n_heads,layers) VALUES (%s,%s,%s,%s)

@@ -1,6 +1,15 @@
 services:
   nginx:
     image: nginx:latest
+    depends_on:
+      orchestrator:
+        condition: service_started
+      auth:
+        condition: service_started
+      user:
+        condition: service_started
+      model:
+        condition: service_started
     ports:
       - "80:80"
     volumes:
@@ -12,6 +21,12 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   db-auth:
     image: postgres
@@ -20,9 +35,15 @@ services:
       POSTGRES_PASSWORD: 123
       POSTGRES_DB: authdb
     ports:
-      - "5433:5432"
+      - "5432:5432"
+    command: postgres -p 5432
     volumes:
       - pgdata:/var/lib/postgresql_auth
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -p 5432 -U user -d authdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   db-orchestrator:
     image: postgres
@@ -31,9 +52,15 @@ services:
       POSTGRES_PASSWORD: 123
       POSTGRES_DB: orchestratordb
     ports:
-      - "5434:5432"
+      - "5431:5431"
+    command: postgres -p 5431
     volumes:
       - pgdata:/var/lib/postgresql_orchestrator
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -p 5431 -U user -d orchestratordb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   db-user:
     image: postgres
@@ -42,9 +69,15 @@ services:
       POSTGRES_PASSWORD: 123
       POSTGRES_DB: userdb
     ports:
-      - "5435:5432"
+      - "5433:5433"
+    command: postgres -p 5433
     volumes:
       - pgdata:/var/lib/postgresql_user
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -p 5433 -U user -d userdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   db-model:
     image: postgres
@@ -53,9 +86,75 @@ services:
       POSTGRES_PASSWORD: 123
       POSTGRES_DB: modeldb
     ports:
-      - "5436:5432"
+      - "5434:5434"
+    command: postgres -p 5434
     volumes:
       - pgdata:/var/lib/postgresql_model
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -p 5434 -U user -d modeldb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  orchestrator:
+    build:
+      context: ./services/orchestrator
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+      db-orchestrator:
+        condition: service_healthy
+        restart: true
+    ports:
+      - "81:81"
+    restart: always
+
+  auth:
+    build:
+      context: ./services/auth
+    depends_on:
+      db-auth:
+        condition: service_healthy
+        restart: true
+    ports:
+      - "82:82"
+    restart: always
+    environment:
+      SECRET_KEY: ${SECRET_KEY}
+
+  user:
+    build:
+      context: ./services/user
+    depends_on:
+      db-user:
+        condition: service_healthy
+        restart: true
+    ports:
+      - "83:83"
+    restart: always
+    environment:
+      SECRET_KEY: ${SECRET_KEY}
+
+  model:
+    build:
+      context: ./services/model
+    depends_on:
+      db-model:
+        condition: service_healthy
+        restart: true
+    ports:
+      - "84:84"
+    restart: always
+
+  worker:
+    build:
+      context: ./worker
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+        restart: true
+    restart: always
 
 volumes:
   pgdata:

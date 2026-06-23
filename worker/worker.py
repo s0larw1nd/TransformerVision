@@ -5,7 +5,6 @@ from transformer_lens import HookedTransformer, utils
 from transformer_lens.utils import get_act_name
 import torch as t
 import circuitsvis as cv
-import einops
 import functools
 from plotly.express import imshow
 import numpy as np
@@ -44,11 +43,10 @@ def to_numpy(
         raise ValueError(f"Invalid type: {type(tensor)}")
 def convert_tokens_to_string(
     model: HookedTransformer,
-    tokens: t.Tensor, 
-    batch_index: int = 0
+    tokens: t.Tensor
 ):
     if len(tokens.shape) == 2:
-        tokens = tokens[batch_index]
+        tokens = tokens[0]
     return [f"|{model.tokenizer.decode(tok)}|_{c}" for (c, tok) in enumerate(tokens)]
 
 @t.no_grad()
@@ -195,12 +193,12 @@ def logit_attribution(
     embed = cache["embed"]
     
     z = cache['z', config["layer_n"]]
-    results = t.einsum('shd,hdm->shm', z, model.W_O[config["layer_n"]])
+    results = (z.unsqueeze(-1) * model.W_O[config["layer_n"]].unsqueeze(0)).sum(dim=-2)
 
     W_U_correct_tokens = model.W_U[:, tokens.squeeze()[1:]]
 
-    direct_attributions = einops.einsum(W_U_correct_tokens, embed[1:], "emb seq, seq emb -> seq")
-    layer_attributions = einops.einsum(W_U_correct_tokens, results[1:], "emb seq, seq nhead emb -> seq nhead")
+    direct_attributions = (W_U_correct_tokens.T * embed[1:]).sum(dim=-1)
+    layer_attributions = (results[1:] * W_U_correct_tokens.T.unsqueeze(1)).sum(dim=-1)
     
     logit_attr = t.concat([direct_attributions.unsqueeze(-1), layer_attributions], dim=-1)
     

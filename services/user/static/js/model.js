@@ -145,11 +145,13 @@ async function get_data(
 }
 
 async function ablation(data = null) {
+    var layers = null;
     if (data == null) {
     const input = document.getElementById('ablation-heads');
     heads = input.value
     .split(',')
     .map(s => Number(s.trim()));
+    layers = [parseInt(layer.value)];
 
     data = await get_data(
         JSON.stringify({
@@ -157,22 +159,30 @@ async function ablation(data = null) {
         cell_id: cellId,
         seq_no: 1,
         model_id: modelId,
-        config: JSON.stringify({ head_n: heads, layer_n: parseInt(layer.value), prompt: document.getElementById('prompt-field').value })
+        config: JSON.stringify({ head_n: heads, layer_n: layers, prompt: document.getElementById('prompt-field').value })
         })
     );
     }
     else {
     const config = JSON.parse(data.method.config);
     heads = config.head_n;
+    layers = config.layer_n;
     };
 
     fig = JSON.parse(data.fig);
 
     document.getElementById("result-card").style.display = 'block';
     var res = '<p>Изменения функции потерь:<\p>'
+    if (layers.length == 1) {
     heads.forEach((head, index) => {
-    res += `<p>${head}: ${data.scores[index]}<\p>`
+        res += `<p>Г.В. ${head}: ${data.scores[index]}<\p>`
     });
+    }
+    else {
+    heads.forEach((head, index) => {
+        res += `<p>Г.В. ${layers[index]}.${head}: ${data.scores[index]}<\p>`
+    });
+    }
     
     document.getElementById("result-card").innerHTML = res;
 
@@ -199,8 +209,6 @@ async function actmap(data = null) {
         })
     );
     };
-
-    console.log(data);
 
     document.getElementById("result-card").style.display = 'block';
     var res = `<p>Паттерны:<\p>
@@ -381,7 +389,6 @@ function translate(method_name) {
 }
 
 async function from_history(id) {
-    console.log(id);
     const resp = await fetch(`/history/${id}`, {
     method: "POST",
     headers: {

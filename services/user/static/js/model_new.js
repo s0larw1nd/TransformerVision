@@ -10,6 +10,7 @@ const historyFields = document.getElementById('historyFields');
 const resultsArea = document.getElementById('resultsArea');
 const promptField = document.getElementById('promptField');
 var chosen = null;
+var mode = null;
 
 modeSwitch.addEventListener("click", () => toggleMode());
 document.getElementById("cell-actmap").addEventListener("click", () => renderToolFields('actmap'));
@@ -394,18 +395,18 @@ function bindNodeEvents() {
         var y = 0;
         var info = "";
         if (el.tagName == "circle") {
-        x = Number(el.cx.baseVal.value);
-        y = Number(el.cy.baseVal.value);
-        info = `
-        слой: ${el.getAttribute("data-level")}<br>
-        узел: ${el.getAttribute("data-idx")}<br>
-        `;
+            x = Number(el.cx.baseVal.value);
+            y = Number(el.cy.baseVal.value);
+            info = `
+            слой: ${el.getAttribute("data-level")}<br>
+            голова внимания: ${el.getAttribute("data-idx")}<br>
+            `;
         }
         else if (el.tagName == "rect") {
-        x = Number(el.x.baseVal.value);
-        y = Number(el.y.baseVal.value);
-        info = `
-        `;
+            x = Number(el.x.baseVal.value);
+            y = Number(el.y.baseVal.value);
+            info = `
+            `;
         }
         tooltip.innerHTML = info;
         const rect = frame.getBoundingClientRect();
@@ -418,23 +419,23 @@ function bindNodeEvents() {
     });
     el.addEventListener('click', () => {
         if (chosen != nodeId(el.getAttribute("data-token"),el.getAttribute("data-level"),el.getAttribute("data-idx"))) {
-        chosen = nodeId(el.getAttribute("data-token"),el.getAttribute("data-level"),el.getAttribute("data-idx"));
+            chosen = nodeId(el.getAttribute("data-token"),el.getAttribute("data-level"),el.getAttribute("data-idx"));
         }
         else {
-        chosen = null;
+            chosen = null;
         }
         drawModel();
 
         const head_input = document.getElementById("head-n");
-        if (head_input) {
-        if (!head_input.value) head_input.value = el.getAttribute("data-idx");
-        else head_input.value += `,${el.getAttribute("data-idx")}`;
+        if (head_input && mode === 'ablation') {
+            if (!head_input.value) head_input.value = el.getAttribute("data-idx");
+            else head_input.value += `,${el.getAttribute("data-idx")}`;
         }
 
         const layer_input = document.getElementById("layer-n");
-        if (layer_input) {
-        if (!layer_input.value) layer_input.value = el.getAttribute("data-level");
-        else layer_input.value += `,${el.getAttribute("data-level")}`;
+        if (layer_input && mode === 'ablation') {
+            if (!layer_input.value) layer_input.value = el.getAttribute("data-level");
+            else layer_input.value += `,${el.getAttribute("data-level")}`;
         }
     });
     });
@@ -444,6 +445,7 @@ function renderToolFields(tool) {
     toolsFields.innerHTML = '';
     var fields = null;
     var func = null;
+    mode = tool;
     switch (tool) {
     case 'actmap':
         fields = {
@@ -508,8 +510,9 @@ function renderToolFields(tool) {
     btnCancel.className = 'btn-link';
     btnCancel.innerHTML = `Отмена`;
     btnCancel.addEventListener('click', (e) => {
-    document.getElementById("toolsSubmenu").style.display = 'none';
-    document.getElementById("toolsMain").style.display = 'block';
+        mode = null;
+        document.getElementById("toolsSubmenu").style.display = 'none';
+        document.getElementById("toolsMain").style.display = 'block';
     });
     toolsFields.appendChild(btnCancel);
 
@@ -709,7 +712,6 @@ async function ablation(data = null) {
     }
     else {
     heads.forEach((head, index) => {
-        console.log()
         res += `<p>Г.В. ${layers[index]}.${head}: ${data.scores[index]}<\p>`
     });
     }

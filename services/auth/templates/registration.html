@@ -4,6 +4,10 @@
   <link rel="stylesheet" href="/auth/static/css/registration.css">
 </head>
 <body>
+  {% if message %}
+    <p class="error-message">{{ message }}</p>
+  {% endif %}
+
   <div class="register-wrap">
     <div class="register-card">
       <h1 class="register-title">Регистрация</h1>

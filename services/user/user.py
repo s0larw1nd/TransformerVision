@@ -1,5 +1,5 @@
 import datetime
-from typing import Annotated, List
+from typing import Annotated, List, Union
 from fastapi import *
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -71,32 +71,32 @@ app.mount(
     name="static"
 )
 
-credentials_exception = HTTPException(
-    status_code=status.HTTP_401_UNAUTHORIZED,
-    detail="Could not validate credentials",
-    headers={"WWW-Authenticate": "Bearer"},
-)
-
 async def get_current_user(
     request: Request
 ):
     token = request.cookies.get("access_token")
+    
+    if not token:
+        return RedirectResponse(url="/", status_code=303)
 
     try:
         payload = jwt.decode(token, os.getenv("SECRET_KEY"), algorithms=["HS256"])
         idx = int(payload.get("sub"))
         if idx is None:
-            raise credentials_exception
-    except jwt.InvalidTokenError:
-        raise credentials_exception
+            raise RedirectResponse(url="/", status_code=303)
+    except Exception:
+        raise RedirectResponse(url="/", status_code=303)
     
     return idx
 
 @app.get("/profile")
 async def profile(
     request: Request,
-    idx: int = Depends(get_current_user)
+    idx: Union[int, RedirectResponse] = Depends(get_current_user)
 ):
+    if isinstance(idx, RedirectResponse):
+        return idx
+
     projects = []
     
     with psycopg.connect(
@@ -161,8 +161,11 @@ async def profile(
 @app.get("/project/create")
 async def create_project(
     request: Request,
-    idx: int = Depends(get_current_user)
+    idx: Union[int, RedirectResponse] = Depends(get_current_user)
 ):
+    if isinstance(idx, RedirectResponse):
+        return idx
+    
     models = requests.get(f"http://nginx:80/model/").json()
     context = {
         "models": models
@@ -178,8 +181,11 @@ async def create_project(
     description: Annotated[str, Form()],
     model: Annotated[int, Form()],
     is_private: Annotated[bool | None, Form()] = False,
-    idx: int = Depends(get_current_user)
+    idx: Union[int, RedirectResponse] = Depends(get_current_user)
 ):
+    if isinstance(idx, RedirectResponse):
+        return idx
+    
     with psycopg.connect(
         "dbname=userdb user=user password=123 host=db-user port=5433",
     ) as conn:
@@ -200,8 +206,11 @@ async def create_project(
 async def project(
     request: Request, 
     id: int,
-    idx: int = Depends(get_current_user)
+    idx: Union[int, RedirectResponse] = Depends(get_current_user)
 ):
+    if isinstance(idx, RedirectResponse):
+        return idx
+    
     with psycopg.connect(
         "dbname=userdb user=user password=123 host=db-user port=5433",
         row_factory=psycopg.rows.namedtuple_row
@@ -283,8 +292,11 @@ async def project(
     request: Request, 
     id_proj: int, 
     id_exp: int,
-    idx: int = Depends(get_current_user)
+    idx: Union[int, RedirectResponse] = Depends(get_current_user)
 ):
+    if isinstance(idx, RedirectResponse):
+        return idx
+    
     with psycopg.connect("dbname=userdb user=user password=123 host=db-user port=5433", row_factory=psycopg.rows.dict_row) as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -317,8 +329,11 @@ async def project(
 async def create_experiment(
     request: Request, 
     id_proj: int,
-    idx: int = Depends(get_current_user)
+    idx: Union[int, RedirectResponse] = Depends(get_current_user)
 ):
+    if isinstance(idx, RedirectResponse):
+        return idx
+    
     with psycopg.connect("dbname=userdb user=user password=123 host=db-user port=5433") as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -342,8 +357,11 @@ async def project_cells_sync(
     id_proj: int, 
     id_exp: int, 
     cells: List[Cell],
-    idx: int = Depends(get_current_user)
+    idx: Union[int, RedirectResponse] = Depends(get_current_user)
 ):
+    if isinstance(idx, RedirectResponse):
+        return idx
+    
     with psycopg.connect("dbname=userdb user=user password=123 host=db-user port=5433") as conn:
         with conn.cursor() as cur:
             for cell in cells:
@@ -364,8 +382,11 @@ async def project_cell_model(
     id_proj: int, 
     id_exp: int, 
     id_cell: int,
-    idx: int = Depends(get_current_user)
+    idx: Union[int, RedirectResponse] = Depends(get_current_user)
 ):
+    if isinstance(idx, RedirectResponse):
+        return idx
+    
     with psycopg.connect("dbname=userdb user=user password=123 host=db-user port=5433") as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -408,8 +429,11 @@ async def project_cell_model(
     id_proj: int, 
     id_exp: int, 
     id_cell: int,
-    idx: int = Depends(get_current_user)
+    idx: Union[int, RedirectResponse] = Depends(get_current_user)
 ):
+    if isinstance(idx, RedirectResponse):
+        return idx
+    
     with psycopg.connect("dbname=userdb user=user password=123 host=db-user port=5433") as conn:
         with conn.cursor() as cur:
             cur.execute("""

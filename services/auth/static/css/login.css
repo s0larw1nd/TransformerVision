@@ -101,3 +101,9 @@
 .field {
     margin-bottom: 14px;
 }
+
+.error-message {
+    color: red;
+    text-align: center;
+    margin-bottom: 15px;
+}

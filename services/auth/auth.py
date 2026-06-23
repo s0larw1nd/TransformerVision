@@ -71,7 +71,6 @@ def get_user(
             cur.execute(q)
             rows = cur.fetchall()
             
-            print(rows, rows[0])
             if len(rows) == 1: return User(idx=rows[0]['id'], username=rows[0]['username'], password=rows[0]['password'])
             return None
 
@@ -79,7 +78,17 @@ def get_user(
 async def get_file(
     request: Request
 ):
-    return templates.TemplateResponse(request, "registration.html")
+    try:
+        token = request.cookies.get("access_token")
+        if not token: raise Exception
+
+        payload = jwt.decode(token, os.getenv("SECRET_KEY"), algorithms=["HS256"])
+        idx = int(payload.get("sub"))
+        if idx is None: raise Exception
+    except Exception:
+        return templates.TemplateResponse(request, "registration.html")
+    else:
+        return RedirectResponse(url="/profile", status_code=303)
     
 @app.post("/register")
 async def register(
@@ -87,22 +96,57 @@ async def register(
     username: Annotated[str, Form()], 
     password: Annotated[str, Form()]
 ):
-    if check_password(password):
+    if not check_password(password):
+        return templates.TemplateResponse(
+            request,
+            "registration.html",
+            {
+                "message": "Пароль не соответствует требованиям"
+            }
+        )
+    
+    try:
         with psycopg.connect("dbname=authdb user=user password=123 host=db-auth port=5432") as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    f"INSERT INTO users (username, password) VALUES ('{username}', '{password}')"
-                )
+                    """
+                    INSERT INTO users (username, password)
+                    VALUES (%s, %s)
+                    """, (username, password))
                 conn.commit()
         return templates.TemplateResponse(request, "registration_success.html")
-    else:
-        return templates.TemplateResponse(request, "registration_failure.html")
+    except psycopg.errors.UniqueViolation:
+        return templates.TemplateResponse(
+            request,
+            "registration.html",
+            {
+                "message": "Такой логин уже существует"
+            }
+        )
+    except Exception as e:
+        return templates.TemplateResponse(
+            request,
+            "registration.html",
+            {
+                "message": f"Ошибка регистрации: {e}"
+            }
+        )
 
 @app.get("/login")
 async def get_file(
     request: Request
 ):
-    return templates.TemplateResponse(request, "login.html")
+    try:
+        token = request.cookies.get("access_token")
+        if not token: raise Exception
+
+        payload = jwt.decode(token, os.getenv("SECRET_KEY"), algorithms=["HS256"])
+        idx = int(payload.get("sub"))
+        if idx is None: raise Exception
+    except Exception:
+        return templates.TemplateResponse(request, "login.html")
+    else:
+        return RedirectResponse(url="/profile", status_code=303)
 @app.post("/login")
 async def login(
     request: Request,
@@ -110,7 +154,14 @@ async def login(
     password: Annotated[str, Form()]
 ):
     user = get_user(username=username, password=password)
-    if not(user): return {"code": "Incorrect password"}
+    if not(user):
+        return templates.TemplateResponse(
+            request,
+            "login.html",
+            {
+                "message": f"Ошибка входа: Некорректный логин или пароль"
+            }
+        )
 
     expire = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=30)
     
@@ -152,26 +203,6 @@ async def get_info(
             
             user = cur.fetchone()
     
-    return user
-
-async def get_current_user(
-    token: Annotated[str, Depends(OAuth2PasswordBearer(tokenUrl="token"))]
-):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-        idx = int(payload.get("sub"))
-        if idx is None:
-            raise credentials_exception
-    except jwt.InvalidTokenError:
-        raise credentials_exception
-    user = get_user(idx=idx)
-    if user is None:
-        raise credentials_exception
     return user
 
 

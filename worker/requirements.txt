@@ -1,7 +1,6 @@
 transformer_lens==3.1.0
 torch==2.12.0
 circuitsvis==1.43.3
-einops==0.7.0
 plotly==5.24.1
 plotly-express==0.4.1
 numpy==2.4.6
